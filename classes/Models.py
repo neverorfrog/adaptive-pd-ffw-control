@@ -20,6 +20,8 @@ class TwoLink(DHRobot):
             zero = 0.0
             a1 = 1
             a2 = 1
+        
+        deg = pi / 180
             
         #links
         link1 = RevoluteDH(
@@ -31,6 +33,7 @@ class TwoLink(DHRobot):
             alpha = 0,
             a = a2,
             d = 0,
+            qlim=[-135 * deg, 135 * deg],  # minimum and maximum joint angle
         )
 
         links = [link1, link2]
