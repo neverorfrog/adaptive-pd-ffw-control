@@ -10,6 +10,3 @@ Kraken : https://github.com/petercorke/robotics-toolbox-python/blob/687d345d9994
 
 Tutorial sul toolbox (solo cinematica) : https://github.com/jhavl/dkt
 
-Comandi per installare toolbox e bdsim:
-pip install git+https://github.com/petercorke/robotics-toolbox-python.git
-pip install git+https://github.com/petercorke/bdsim.git 
