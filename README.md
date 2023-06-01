@@ -10,3 +10,5 @@ Kraken : https://github.com/petercorke/robotics-toolbox-python/blob/687d345d9994
 
 Tutorial sul toolbox (solo cinematica) : https://github.com/jhavl/dkt
 
+Esempi libro : https://github.com/petercorke/RVC3-python
+
