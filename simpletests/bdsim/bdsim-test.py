@@ -23,4 +23,3 @@ sim.report(bd, "schedule")
 bd.compile()          # check the diagram
 bd.report_summary()   # list the system
 out = sim.run(bd, 5)   # simulate for 5s
-print(out)
