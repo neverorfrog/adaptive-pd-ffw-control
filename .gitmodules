@@ -1,0 +1,6 @@
+[submodule "bdsim"]
+	path = bdsim
+	url = https://github.com/neverorfrog/bdsim.git
+[submodule "roboticstoolbox"]
+	path = roboticstoolbox
+	url = https://github.com/petercorke/robotics-toolbox-python.git
