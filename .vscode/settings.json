@@ -1,5 +1,6 @@
 {
     "python.analysis.extraPaths": [
-        "./roboticstoolbox"
+        "./roboticstoolbox",
+        "./src/tools"
     ]
 }

@@ -6,7 +6,7 @@ from spatialmath import SE3, base
 
 class TwoLink(DHRobot):
     """
-    Class that models a 2-link robot (for now planar in the xy plane)
+    Class that models a 2-link robot (for now planar in the xy plane) with fictituous dynamic parameters
     """
 
     def __init__(self, symbolic = False):
@@ -25,15 +25,24 @@ class TwoLink(DHRobot):
             
         #links
         link1 = RevoluteDH(
-            alpha = 0,
-            a = a1,
-            d = 0,
+            alpha = 0, #link twist
+            a = a1, #link length
+            d = 0, #offset along the z axis
+            m = 1, #mass of the link
+            r = [0.5,0,0], #position of COM with respect to link frame
+            I=[0, 0, 1, 0, 0, 0], #inertia tensor,
+            B = 2, #viscous friction
+            qlim=[-135 * deg, 135 * deg]
         )
         link2 = RevoluteDH(
             alpha = 0,
             a = a2,
             d = 0,
-            qlim=[-135 * deg, 135 * deg],  # minimum and maximum joint angle
+            m = 1,
+            r = [0.5,0,0],
+            I=[0, 0, 0.2, 0, 0, 0],
+            B = 0.2,
+            qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
         )
 
         links = [link1, link2]
@@ -45,25 +54,15 @@ class TwoLink(DHRobot):
 
         self.addconfiguration("qr", self.qr)
         self.addconfiguration("qg", self.qg)
-        
+    
+    def jacob0(self, q=None, T=None, half=None, start=None, end=None):
+        J = DHRobot.jacob0(self,q)
+        return J[0:2,:]
 
 class Puma560(DHRobot):
     """
     Class that models a Puma 560 manipulator
-
-    :param symbolic: use symbolic constants
-    :type symbolic: bool
-
-    ``Puma560()`` is an object which models a Unimation Puma560 robot and
-    describes its kinematic and dynamic characteristics using standard DH
-    conventions.
-
-    .. runblock:: pycon
-
-        >>> import roboticstoolbox as rtb
-        >>> robot = rtb.models.DH.Puma560()
-        >>> print(robot)
-
+    
     Defined joint configurations are:
 
     - qz, zero joint angle configuration, 'L' shaped configuration
@@ -80,19 +79,6 @@ class Puma560(DHRobot):
           frame.
         - Gravity load torque is the motor torque necessary to keep the joint
           static, and is thus -ve of the gravity caused torque.
-
-    .. warning:: Compared to the MATLAB version of the Toolbox this model
-        includes the pedestal, making the z-coordinates 26 inches larger.
-
-    :references:
-        - "A search for consensus among model parameters reported for the PUMA
-          560 robot", P. Corke and B. Armstrong-Helouvry,
-          Proc. IEEE Int. Conf. Robotics and Automation, (San Diego),
-          pp. 1608-1613, May 1994. (for kinematic and dynamic parameters)
-        - "A combined optimization method for solving the inverse kinematics
-          problem", Wang & Chen, IEEE Trans. RA 7(4) 1991 pp 489-.
-          (for joint angle limits)
-        - https://github.com/4rtur1t0/ARTE/blob/master/robots/UNIMATE/puma560/parameters.m
 
     .. codeauthor:: Peter Corke
     """  # noqa
@@ -224,116 +210,3 @@ class Puma560(DHRobot):
 
         # straight and horizontal
         self.addconfiguration_attr("qs", np.array([0, 0, -pi / 2, 0, 0, 0]))
-
-    def ikine_a(self, T, config="lun"):
-        """
-        Analytic inverse kinematic solution
-
-        :param T: end-effector pose
-        :type T: SE3
-        :param config: arm configuration, defaults to "lun"
-        :type config: str, optional
-        :return: joint angle vector in radians
-        :rtype: ndarray(6)
-
-        ``robot.ikine_a(T, config)`` is the joint angle vector which achieves the
-        end-effector pose ``T```.  The configuration string selects the specific
-        solution and is a sting comprising the following letters:
-
-        ======   ==============================================
-        Letter   Meaning
-        ======   ==============================================
-        l        Choose the left-handed configuration
-        r        Choose the right-handed configuration
-        u        Choose the elbow up configuration
-        d        Choose the elbow down configuration
-        n        Choose the wrist not-flipped configuration
-        f        Choose the wrist flipped configuration
-        ======   ==============================================
-
-
-        :reference:
-            - Inverse kinematics for a PUMA 560,
-              Paul and Zhang,
-              The International Journal of Robotics Research,
-              Vol. 5, No. 2, Summer 1986, p. 32-44
-
-        :author: based on MATLAB code by Robert Biro with Gary Von McMurray,
-            GTRI/ATRP/IIMB, Georgia Institute of Technology, 2/13/95
-
-        """
-
-        def ik3(robot, T, config="lun"):
-
-            config = self.config_validate(config, ("lr", "ud", "nf"))
-
-            # solve for the first three joints
-
-            a2 = robot.links[1].a
-            a3 = robot.links[2].a
-            d1 = robot.links[0].d
-            d3 = robot.links[2].d
-            d4 = robot.links[3].d
-
-            # The following parameters are extracted from the Homogeneous
-            # Transformation as defined in equation 1, p. 34
-
-            Px, Py, Pz = T.t
-            Pz -= d1  # offset the pedestal height
-            theta = np.zeros((3,))
-
-            # Solve for theta[0]
-            # r is defined in equation 38, p. 39.
-            # theta[0] uses equations 40 and 41, p.39,
-            # based on the configuration parameter n1
-
-            r = np.sqrt(Px**2 + Py**2)
-            if "r" in config:
-                theta[0] = np.arctan2(Py, Px) + np.arcsin(d3 / r)
-            elif "l" in config:
-                theta[0] = np.arctan2(Py, Px) + np.pi - np.arcsin(d3 / r)
-            else:
-                raise ValueError("bad configuration string")
-
-            # Solve for theta[1]
-            # V114 is defined in equation 43, p.39.
-            # r is defined in equation 47, p.39.
-            # Psi is defined in equation 49, p.40.
-            # theta[1] uses equations 50 and 51, p.40, based on the
-            # configuration parameter n2
-            if "u" in config:
-                n2 = 1
-            elif "d" in config:
-                n2 = -1
-            else:
-                raise ValueError("bad configuration string")
-
-            if "l" in config:
-                n2 = -n2
-
-            V114 = Px * np.cos(theta[0]) + Py * np.sin(theta[0])
-
-            r = np.sqrt(V114**2 + Pz**2)
-
-            with np.errstate(invalid="raise"):
-                try:
-                    Psi = np.arccos(
-                        (a2**2 - d4**2 - a3**2 + V114**2 + Pz**2)
-                        / (2.0 * a2 * r)
-                    )
-                except FloatingPointError:
-                    return "Out of reach"
-
-            theta[1] = np.arctan2(Pz, V114) + n2 * Psi
-
-            # Solve for theta[2]
-            # theta[2] uses equation 57, p. 40.
-            num = np.cos(theta[1]) * V114 + np.sin(theta[1]) * Pz - a2
-            den = np.cos(theta[1]) * Pz - np.sin(theta[1]) * V114
-            theta[2] = np.arctan2(a3, d4) - np.arctan2(num, den)
-
-            theta = base.angdiff(theta)
-
-            return theta
-
-        return self.ikine_6s(T, config, ik3)
