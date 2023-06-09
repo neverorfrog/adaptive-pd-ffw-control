@@ -1,9 +1,10 @@
 {
-    "id": 140248753195712,
+    "id": 140661996758416,
     "created_by": "corkep",
     "creation_time": 1631408397,
-    "scene_width": 8153.6,
-    "scene_height": 3785.6000000000004,
+    "simulation_time": 10.0,
+    "scene_width": 10416.000000000002,
+    "scene_height": 5348.000000000001,
     "blocks": [
         {
             "id": 140184811303264,
@@ -50,6 +51,14 @@
                 [
                     "pinv",
                     false
+                ],
+                [
+                    "transpose",
+                    false
+                ],
+                [
+                    "blockargs",
+                    null
                 ],
                 [
                     "transpose",
@@ -177,6 +186,10 @@
                 [
                     "blockargs",
                     null
+                ],
+                [
+                    "blockargs",
+                    null
                 ]
             ]
         },
@@ -276,6 +289,10 @@
                 [
                     "blockargs",
                     null
+                ],
+                [
+                    "blockargs",
+                    null
                 ]
             ]
         }
@@ -353,8 +370,8 @@
             "text": "qdot",
             "pos_x": 65.0,
             "pos_y": -85.0,
-            "width": 36,
-            "height": 24,
+            "width": 46,
+            "height": 31,
             "fill_color": [
                 255,
                 255,
@@ -368,8 +385,8 @@
             "text": "q",
             "pos_x": 250.0,
             "pos_y": -85.0,
-            "width": 16,
-            "height": 24,
+            "width": 19,
+            "height": 31,
             "fill_color": [
                 255,
                 255,
