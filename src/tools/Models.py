@@ -57,7 +57,63 @@ class TwoLink(DHRobot):
     
     def jacob0(self, q=None, T=None, half=None, start=None, end=None):
         J = DHRobot.jacob0(self,q)
-        return J[0:2,:]
+        return J[0:2,:]        
+    
+
+class UncertantTwoLink(DHRobot):
+    """
+    Class that models a 2-link robot (for now planar in the xy plane) with fictituous dynamic parameters
+    """
+
+    def __init__(self, symbolic = False):
+
+        if symbolic:
+            pi = sym.pi()
+            a1, a2 = sympy.symbols("a1 a2")
+            zero = sym.zero()
+        else:
+            from math import pi
+            zero = 0.0
+            a1 = 1
+            a2 = 1
+        
+        deg = pi / 180
+            
+        #links
+        link1 = RevoluteDH(
+            alpha = 0, #link twist
+            a = a1, #link length
+            d = 0, #offset along the z axis
+            m = 1.4, #mass of the link
+            r = [0.5,1.0,0], #position of COM with respect to link frame
+            I=[0, 0, 1, 0, 1, 0], #inertia tensor,
+            B = 1, #viscous friction
+            qlim=[-135 * deg, 135 * deg]
+        )
+        link2 = RevoluteDH(
+            alpha = 0,
+            a = a2,
+            d = 0,
+            m = 0.3,
+            r = [0.5,0,0.3],
+            I=[0, 0.5, 0.2, 0, 0, 0],
+            B = 0.7,
+            qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
+        )
+
+        links = [link1, link2]
+
+        super().__init__(links, name="Planar 2R uncertant", keywords=("planar",), symbolic = symbolic)
+
+        self.qr = np.array([0, pi / 2])
+        self.qg = np.array([pi / 2, -pi/2])
+
+        self.addconfiguration("qr", self.qr)
+        self.addconfiguration("qg", self.qg)
+    
+    def jacob0(self, q=None, T=None, half=None, start=None, end=None):
+        J = DHRobot.jacob0(self,q)
+        return J[0:2,:]      
 
 class Puma560(DHRobot):
     """
