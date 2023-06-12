@@ -46,9 +46,9 @@ class Control():
         
         
         if epochs is None:
-            self.q = [self.robot.q.tolist()]; 
-            self.t = [0];
-            self.u = [np.ndarray((self.robot.n)).tolist()]; 
+            self.q = [self.robot.q.tolist()]
+            self.t = [0]
+            self.u = [np.ndarray((self.robot.n)).tolist()]
             arrived = False
             while not arrived:
                 signal, arrived = self.feedback()
