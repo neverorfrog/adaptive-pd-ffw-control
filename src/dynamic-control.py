@@ -24,11 +24,11 @@ class PDReg(Control):
          
     def feedback(self):
         '''Computes the torque necessary to reach the reference position (without gravity)'''
-        gamma = 3
+        gamma = 2
 
         e = self.reference - self.robot.q #position error
         ed = -self.robot.qd
-        arrived = np.sum(np.abs(e)) < self.threshold
+        arrived = np.sum(np.abs(e)) < self.threshold and np.abs(ed) < self.threshold
         torque = gamma * self.kp @ e + self.kd @ ed + self.gravityTerm_est
 
         #Gravity term update
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     
     loop = PDReg(robot,env, [0,-9.81,0], brobot)
     loop.setR(reference = [pi/2,-pi/2])
-    loop.setK(kp = [10,10], kd = [6,6])
+    loop.setK(kp = [300,300], kd = [40,40])
     loop.simulate()
     loop.plot()
     
