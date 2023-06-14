@@ -50,38 +50,22 @@ class Control():
         if epochs is None:
             epochs = float('inf')
         
-        # if epochs is None:
         self.q = [self.robot.q.tolist()]
         self.qd = [self.robot.qd.tolist()]
         self.t = [0]
         self.u = [np.ndarray((self.robot.n)).tolist()]
         arrived = False
         self.i = 0
-        while not arrived and self.i < epochs:
+        while True:
             signal, arrived = self.feedback()
-            self.apply(signal)
             self.i += 1
+            if arrived or self.i == epochs: break
+            self.apply(signal)
             self.env.step(self.dt)
             self.q.append(self.robot.q.tolist())
             self.qd.append(self.robot.qd.tolist())
             self.t.append(self.t[-1] + self.dt)
             self.u.append(signal.tolist())
-        # else:
-        #     self.q = np.zeros((epochs,self.robot.n))
-        #     self.qd = np.zeros((epochs,self.robot.n))
-        #     self.t = np.arange(stop = epochs, step = 1) * self.dt
-        #     self.u = np.zeros((epochs,self.robot.n))
-        #     arrived = False
-        #     self.i = 0
-        #     for i in range(epochs):
-        #         signal, arrived = self.feedback()
-        #         if arrived: break
-        #         self.apply(signal)
-        #         self.i += 1
-        #         self.env.step(self.dt)
-        #         self.q[i,:] = self.robot.q
-        #         self.qd[i,:] = self.robot.qd
-        #         self.u[i,:] = signal
                 
                 
     def plot(self):        
@@ -98,8 +82,12 @@ class Control():
         axs[0,2].set_title("u")
         
         for i in range(self.robot.n):
-            axs[i,0].plot(t, q[:,i], lw = 2)
-            axs[i,1].plot(t, qd[:,i], lw = 2)
+            axs[i,0].plot(t, q[:,i], lw = 2, color = "red")
+            axs[i,0].plot(t, self.reference.q[:,i], lw = 2, color = "blue")
+            
+            axs[i,1].plot(t, qd[:,i], lw = 2, color = "red")
+            axs[i,1].plot(t, self.reference.qd[:,i], lw = 2, color = "blue")
+            
             axs[i,2].plot(t, u[:,i], lw = 2)
         plt.show(block = True) 
           

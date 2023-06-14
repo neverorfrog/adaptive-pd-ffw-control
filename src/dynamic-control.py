@@ -94,7 +94,6 @@ class Feedforward(Control):
         
         torque_ff = self.robot.rne(pos,vel,acc, self.gravity)
         
-        print(self.i)
         # print(f" Reference: {self.reference.q[self.i]}\n Actual configuration: {pos} \n")
         e = self.reference.q[self.i] - pos #position error
         ed = self.reference.qd[self.i] - vel #velocity error
@@ -102,7 +101,7 @@ class Feedforward(Control):
         e_goal = self.goal - pos
         ed_goal = -vel
         arrived = np.sum(np.abs(e_goal)) < self.threshold and np.sum(np.abs(ed_goal)) < self.threshold
-        # grav = self.robot.gravload(q=self.robot.q, gravity=self.gravity)
+        # grav = self.robot.gravload(q = pos, gravity=self.gravity)
         torque = torque_ff + self.kp @ e + self.kd @ ed 
 
         return torque , arrived   
@@ -118,7 +117,7 @@ if __name__ == "__main__":
     env = PyPlot()
     
     #t is the number of steps
-    epochs = 200
+    epochs = 100
     traj = jtraj(q0 = robot.q, qf = [1.5,1], t = epochs)
     loop = Feedforward(robot, env, [0,-9.81,0])
     loop.setR(reference = traj, goal = [1.5,1], threshold = 0.1)
