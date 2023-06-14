@@ -18,8 +18,8 @@ class TwoLink(DHRobot):
         else:
             from math import pi
             zero = 0.0
-            a1 = 1
-            a2 = 1
+            a1 = 0.5
+            a2 = 0.5
         
         deg = pi / 180
             
@@ -28,20 +28,20 @@ class TwoLink(DHRobot):
             alpha = 0, #link twist
             a = a1, #link length
             d = 0, #offset along the z axis
-            m = 1, #mass of the link
-            r = [0.5,0,0], #position of COM with respect to link frame
-            I=[0, 0, 1, 0, 0, 0], #inertia tensor,
-            B = 2, #viscous friction
+            m = 10, #mass of the link
+            r = [0.25,0,0], #position of COM with respect to link frame
+            I=[0, 0, 5/24, 0, 0, 0], #inertia tensor,
+            B = 0, #viscous friction
             qlim=[-135 * deg, 135 * deg]
         )
         link2 = RevoluteDH(
             alpha = 0,
             a = a2,
             d = 0,
-            m = 1,
-            r = [0.5,0,0],
-            I=[0, 0, 0.2, 0, 0, 0],
-            B = 0.2,
+            m = 5,
+            r = [0.25,0,0],
+            I=[0, 0, 5/48, 0, 0, 0],
+            B = 0,
             qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
         )
 
@@ -104,6 +104,10 @@ class UncertantTwoLink(DHRobot):
         links = [link1, link2]
 
         super().__init__(links, name="Planar 2R uncertant", keywords=("planar",), symbolic = symbolic)
+        
+        self.q = [0,0]
+        self.qd = [0,0]
+        self.qdd = [0,0]
 
         self.qr = np.array([0, pi / 2])
         self.qg = np.array([pi / 2, -pi/2])
