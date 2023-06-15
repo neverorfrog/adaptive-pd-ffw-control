@@ -44,9 +44,6 @@ class FBL(Control):
 
         condition = self.t[-1] >= self.reference.T and sum(abs(e)) < self.threshold and sum(abs(ed)) < self.threshold
 
-        print(sum(abs(e)))
-        print(self.threshold)
-
         return torque , condition 
         
         
