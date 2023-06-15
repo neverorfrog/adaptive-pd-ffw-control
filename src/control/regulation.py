@@ -22,14 +22,14 @@ class Regulation(Control):
         #next step
         self.robot.qdd = self.robot.accel(self.robot.q,self.robot.qd, torque, gravity = self.gravity)
          
-    def feedback(self):
+    def feedback(self, kp, kd):
         '''Computes the torque necessary to reach the reference position'''
         e = self.goal - self.robot.q #position error
         ed = -self.robot.qd
         arrived = np.sum(np.abs(e)) < self.threshold and np.sum(np.abs(ed)) < self.threshold
         current_gravity = self.robot.gravload(q=self.robot.q, gravity=self.gravity)
         print(f" CURRENT GRAVITY TERM: {current_gravity}\n")
-        torque = self.kp @ e + self.kd @ ed + current_gravity
+        torque = kp @ e + kd @ ed + current_gravity
 
         return torque , arrived
         
@@ -68,47 +68,8 @@ class Iterative(Control):
             print(f" CURRENT GRAVITY TERM PREDICTED: {self.gravityTerm_est}\nGROUND TRUTH: {realGravityTerm}")
 
         return torque , arrived
-    
-class Feedforward(Control):
-
-    def __init__(self, robot=None, env=None, gravity=[0,0,0]):
-        super().__init__(robot, env)
-        self.gravity = gravity
-        
-    
-    def apply(self, torque) -> None:
-        #numerical integration (runge kutta 2)
-        qd2 = self.robot.qd + (self.dt/2)*self.robot.qdd; 
-        q2 = self.robot.q + self.dt/2*qd2; 
-        qdd2 = self.robot.accel(q2,qd2, torque, gravity = self.gravity)
-        self.robot.qd = self.robot.qd + self.dt*qdd2
-        
-        #next step
-        self.robot.qdd = self.robot.accel(self.robot.q,self.robot.qd, torque, gravity = self.gravity)
-         
-    def feedback(self):
-        '''Computes the torque necessary to reach the reference position'''
-        pos = self.robot.q
-        vel = self.robot.qd
-        acc = self.robot.qdd
-        
-        torque_ff = self.robot.rne(pos,vel,acc, self.gravity)
-        
-        # print(f" Reference: {self.reference.q[self.i]}\n Actual configuration: {pos} \n")
-        e = self.reference.q[self.i] - pos #position error
-        ed = self.reference.qd[self.i] - vel #velocity error
-        # print(f" Position error: {e}\n Velocity error: {ed} \n")
-        e_goal = self.goal - pos
-        ed_goal = -vel
-        arrived = np.sum(np.abs(e_goal)) < self.threshold and np.sum(np.abs(ed_goal)) < self.threshold
-        # grav = self.robot.gravload(q = pos, gravity=self.gravity)
-        torque = torque_ff + self.kp @ e + self.kd @ ed 
-
-        return torque , arrived   
-    
- 
-        
-    
+            
+                
 if __name__ == "__main__":
     
     #robot and environment creation
@@ -116,13 +77,11 @@ if __name__ == "__main__":
     robot = TwoLink()
     env = PyPlot()
     
-    #t is the number of steps
-    epochs = 100
-    traj = jtraj(q0 = robot.q, qf = [1.5,1], t = epochs)
-    loop = Feedforward(robot, env, [0,-9.81,0])
-    loop.setR(reference = traj, goal = [1.5,1], threshold = 0.1)
-    loop.setK(kp = [80,40], kd = [60,30])
-    loop.simulate(dt = 1/epochs, epochs = epochs)
+    goal = [1.5,1]
+    loop = Regulation(robot, env, [0,-9.81,0])
+    loop.setR(goal = goal, threshold = 0.1)
+    loop.setK(kp = [100,50], kd = [200,70])
+    loop.simulate(dt = 0.01)
     loop.plot()
     
 

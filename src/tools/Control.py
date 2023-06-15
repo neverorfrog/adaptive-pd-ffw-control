@@ -15,27 +15,43 @@ class Control():
         
         #robot 
         self.robot = robot
-        self.robot.qd = np.zeros((robot.n)) 
+        self.robot.q = np.zeros((robot.n))
+        self.robot.qd = np.zeros((robot.n))
+        self.robot.qdd = np.zeros((robot.n))
         
         env.add(robot)
-    
+        
+        #For simulation plotting purposes
+        self.q = [np.array(self.robot.q)]
+        self.qd = [np.array(self.robot.qd)]
+        self.qdd = [np.array(self.robot.qdd)]
+        self.t = [0]
+         
+          
     def apply(self, signal) -> None:
         self.robot.qd = signal
     
     def feedback(self) -> Tuple[np.ndarray, bool]:
         return np.random.rand(self.robot.n)
     
-    def setR(self, reference = None, goal = None, threshold = 0.001):
+    def setR(self, reference = None, goal = None, threshold = 0.01):
         if reference is not None:
             self.reference = reference
+            q_d, qd_d, qdd_d = reference(self.robot.n, 0)
+            self.q_d = [q_d]
+            self.qd_d = [qd_d]
+            self.qdd_d = [qdd_d]
+
         self.threshold = threshold
         if goal is not None:
             self.goal = goal
+            
     def setK(self, kp = None, kd = None):
         if kp is not None:
             self.kp = np.diag(kp)
         if kd is not None:
             self.kd = np.diag(kd)
+            
     def setdt(self, dt):
         self.dt = dt
         
@@ -50,45 +66,45 @@ class Control():
         if epochs is None:
             epochs = float('inf')
         
-        self.q = [self.robot.q.tolist()]
-        self.qd = [self.robot.qd.tolist()]
-        self.t = [0]
-        self.u = [np.ndarray((self.robot.n)).tolist()]
         arrived = False
         self.i = 0
         while True:
+            if arrived or self.i == epochs: break
             signal, arrived = self.feedback()
             self.i += 1
-            if arrived or self.i == epochs: break
             self.apply(signal)
             self.env.step(self.dt)
-            self.q.append(self.robot.q.tolist())
-            self.qd.append(self.robot.qd.tolist())
-            self.t.append(self.t[-1] + self.dt)
-            self.u.append(signal.tolist())
                 
                 
     def plot(self):        
-        fig, axs = plt.subplots(self.robot.n, 3)  # a figure with a nx3 grid of Axes
-
-        t = np.array(self.t) 
+        fig, axs = plt.subplots(self.robot.n, 4, sharey = True, sharex = True)# a figure with a nx3 grid of Axes
+        
         q = np.array(self.q)
         qd = np.array(self.qd)
+        qdd = np.array(self.qdd)
+        q_d = np.array(self.q_d)
+        qd_d = np.array(self.qd_d)
+        qdd_d = np.array(self.qdd_d)
         u = np.array(self.u)
         
         fig.suptitle("Joint data in function of time")
         axs[0,0].set_title("q")
         axs[0,1].set_title("q_dot")
-        axs[0,2].set_title("u")
+        axs[0,2].set_title("q_dot_dot")
+        axs[0,3].set_title("u")
         
         for i in range(self.robot.n):
-            axs[i,0].plot(t, q[:,i], lw = 2, color = "red")
-            axs[i,0].plot(t, self.reference.q[:,i], lw = 2, color = "blue")
+            axs[i,0].set_ylabel(f"joint {i+1}")
+            axs[i,0].plot(self.t, q[:,i], lw = 2, color = "red")
+            axs[i,1].plot(self.t, qd[:,i], lw = 2, color = "red")
+            axs[i,2].plot(self.t, qdd[:,i], lw = 2, color = "red")
             
-            axs[i,1].plot(t, qd[:,i], lw = 2, color = "red")
-            axs[i,1].plot(t, self.reference.qd[:,i], lw = 2, color = "blue")
+            axs[i,0].plot(self.t, q_d[:,i], lw = 2, color = "blue")
+            axs[i,1].plot(self.t, qd_d[:,i], lw = 2, color = "blue")
+            axs[i,2].plot(self.t, qdd_d[:,i], lw = 2, color = "blue")
             
-            axs[i,2].plot(t, u[:,i], lw = 2)
+            axu = fig.add_subplot(self.robot.n,4, 4 + i*4)
+            axu.plot(self.t, u[:,i], lw = 2, color = "green")
         plt.show(block = True) 
           
         

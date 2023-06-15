@@ -57,7 +57,67 @@ class TwoLink(DHRobot):
     
     def jacob0(self, q=None, T=None, half=None, start=None, end=None):
         J = DHRobot.jacob0(self,q)
-        return J[0:2,:]        
+        return J[0:2,:] 
+    
+
+class ThreeLink(DHRobot):
+    """
+    Class that models a 3-link robot with fictituous dynamic parameters
+    """
+
+    def __init__(self, symbolic = False):
+
+        if symbolic:
+            pi = sym.pi()
+            a1, a2 = sympy.symbols("a1 a2 a3")
+            zero = sym.zero()
+        else:
+            from math import pi
+            zero = 0.0
+            a1 = 0.5
+            a2 = 0.5
+        
+        deg = pi / 180
+            
+        #links
+        link1 = RevoluteDH(
+            alpha = 0, #link twist
+            a = a1, #link length
+            d = 0, #offset along the z axis
+            m = 10, #mass of the link
+            r = [0.25,0,0], #position of COM with respect to link frame
+            I=[0, 0, 5/24, 0, 0, 0], #inertia tensor,
+            B = 0, #viscous friction
+            qlim=[-135 * deg, 135 * deg]
+        )
+        link2 = RevoluteDH(
+            alpha = 0,
+            a = a2,
+            d = 0,
+            m = 5,
+            r = [0.25,0,0],
+            I=[0, 0, 5/48, 0, 0, 0],
+            B = 0,
+            qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
+        )
+        link3 = RevoluteDH(
+            alpha = 0,
+            a = a2,
+            d = 0,
+            m = 5,
+            r = [0.25,0,0],
+            I=[0, 0, 5/48, 0, 0, 0],
+            B = 0,
+            qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
+        )
+
+        links = [link1, link2, link3]
+
+        super().__init__(links, name="3R", keywords=("planar",), symbolic = symbolic)
+    
+    def jacob0(self, q=None, T=None, half=None, start=None, end=None):
+        J = DHRobot.jacob0(self,q)
+        return J[0:3,:]       
     
 
 class UncertantTwoLink(DHRobot):
