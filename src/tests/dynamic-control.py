@@ -44,7 +44,7 @@ if __name__ == "__main__":
     
     #robot and environment creation
     brobot = UncertantTwoLink()
-
+    
     robot = TwoLink()
     robot.q = [0,0]
     robot.qd = [0,0]
