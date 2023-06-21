@@ -1,9 +1,13 @@
 import numpy as np
-
+from roboticstoolbox.tools.trajectory import *
 
 class ClippedTrajectory():
     def __init__(self, functions, T) -> None:
         self.functions = functions 
+        self.T = T
+        
+    def __init__(self, start, goal, T) -> None:
+        self.functions = [quintic_func(start[i], goal[i],T) for i in range(len(start))]
         self.T = T
     
     def __call__(self, n, t):
