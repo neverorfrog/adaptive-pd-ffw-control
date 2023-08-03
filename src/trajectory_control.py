@@ -96,14 +96,46 @@ class FBL(TrajectoryControl):
         
         self.append(q,qd,qdd,q_d,qd_d,qdd_d,torque)
 
-        return torque, arrived    
-       
+        return torque, arrived   
+
+
+class Adaptive_ffw(TrajectoryControl):
+
+    def __init__(self, robot=None, env=None, gravity=[0,0,0]):
+        super().__init__(robot, env, gravity)       
+        self.theta = np.array([5,3]) #aka a2 a3
+
+        self.a1 = robot.links[1].r[0] * robot.links[1].m 
+        self.a4 = robot.links[1].m*self.robot.links[0].a + self.robot.links[0].r[0]*self.robot.links[0].m
+                 
+    def feedback(self):
+        
+        #Current configuration
+        q = self.robot.q
+        qd = self.robot.qd
+        qdd = self.robot.qdd
+
+        #e = q_d - q
+        #ed = qd_d - qd
+
+        y = np.matrix([[qdd[0], qdd[1]],[0, (qdd[0] + qdd[1])]])
+
+        l1 = self.robot.links[0].a
+
+        m0 = np.matrix([[2*self.a1*l1*np.cos(q[1]), self.a1*l1*np.cos(q[1])],[self.a1*l1*np.cos(q[1]), 0]])
+
+        c0 = np.array([-self.a1*l1*qd[1]*np.sin(q[1])*(2*qd[0]+qd[1]), self.a1*l1*np.sin(q[1])*(qd[0]**2)]).T
+
+        g0 = np.array([self.a1*self.gravity[1]*np.cos(q[0]+q[1])+ self.a4*self.gravity[1]*np.cos(q[0]), self.a1*self.gravity[1]*np.cos(q[0]+q[1])])
+
+        
+        return [1,1], False
     
 if __name__ == "__main__":
     
     #robot and environment creation
     brobot = UncertantTwoLink()
-    robot = ThreeLink()
+    robot = TwoLink()
     env = PyPlot()
     goal = [pi/2,0,0]
     
@@ -113,7 +145,7 @@ if __name__ == "__main__":
     traj = ClippedTrajectory(traj_fun, T)
     
     # loop = Feedforward(robot, env, [0,-9.81,0])
-    loop = FBL(robot, env, [0,-9.81,0])
+    loop = Adaptive_ffw(robot, env, [0,-9.81,0])
     
     loop.setR(reference = traj, goal = goal, threshold = 0.2)
     loop.setK(kp = [100,80,80], kd = [60,40,40])
