@@ -4,7 +4,8 @@ from tools.Control import Control
 from roboticstoolbox.backends.PyPlot import PyPlot
 from math import pi
 from roboticstoolbox.tools.trajectory import *
-from Utils import *
+from tools.Utils import *
+
 
 class TrajectoryControl(Control):
     def __init__(self, robot=None, env=None, gravity=[0,0,0]):
@@ -50,7 +51,7 @@ class Feedforward(TrajectoryControl):
         
         #Current configuration
         q = self.robot.q
-        qd = self.robot.qd
+        qd = self.robot.qd        
     
         #Reference Configuration
         q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
@@ -61,7 +62,7 @@ class Feedforward(TrajectoryControl):
         arrived = self.check_termination(e,ed)
         
         #Feedforward torque computation
-        # torque_ff = self.robot.rne(q_d,qd_d,qdd_d, self.gravity)
+        print(qdd_d)
         torque_ff = self.robot.inertia(q_d) @ qdd_d + self.robot.coriolis(q_d, qd_d) @ qd_d + self.robot.gravload(q_d, gravity = self.gravity)
         
         #Feedback action
@@ -83,7 +84,7 @@ class FBL(TrajectoryControl):
         #Current configuration
         q = self.robot.q
         qd = self.robot.qd
-        qdd = self.robot.qdd
+        
 
         #Reference Configuration
         q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
@@ -101,7 +102,6 @@ class FBL(TrajectoryControl):
 
         return torque, arrived   
 
-
 class Adaptive_ffw(TrajectoryControl):
 
     def __init__(self, robot=None, env=None, gravity=[0,0,0]):
@@ -112,27 +112,40 @@ class Adaptive_ffw(TrajectoryControl):
         self.a4 = robot.links[1].m*self.robot.links[0].a + self.robot.links[0].r[0]*self.robot.links[0].m
                  
     def feedback(self):
-        
+
         #Current configuration
         q = self.robot.q
         qd = self.robot.qd
-        qdd = self.robot.qdd
-
-        #e = q_d - q
-        #ed = qd_d - qd
-
-        y = np.matrix([[qdd[0], qdd[1]],[0, (qdd[0] + qdd[1])]])
-
-        l1 = self.robot.links[0].a
-
-        m0 = np.matrix([[2*self.a1*l1*np.cos(q[1]), self.a1*l1*np.cos(q[1])],[self.a1*l1*np.cos(q[1]), 0]])
-
-        c0 = np.array([-self.a1*l1*qd[1]*np.sin(q[1])*(2*qd[0]+qd[1]), self.a1*l1*np.sin(q[1])*(qd[0]**2)]).T
-
-        g0 = np.array([self.a1*self.gravity[1]*np.cos(q[0]+q[1])+ self.a4*self.gravity[1]*np.cos(q[0]), self.a1*self.gravity[1]*np.cos(q[0]+q[1])])
-
         
-        return [1,1], False
+        #Reference Configuration
+        q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
+
+        print(self.t[-1])
+
+        #Error
+        e = q_d - q
+        ed = qd_d - qd
+        arrived = self.check_termination(e,ed)
+        
+        #feedback action for known parameters
+        y = np.matrix([[qdd_d[0], qdd_d[1]],[0, (qdd_d[0] + qdd_d[1])]])
+        l1 = self.robot.links[0].a 
+        m0 = np.matrix([[2*self.a1*l1*np.cos(q_d[1]), self.a1*l1*np.cos(q_d[1])],[self.a1*l1*np.cos(q_d[1]), 0]])
+        c0 = np.array([-self.a1*l1*qd_d[1]*np.sin(q_d[1])*(2*qd_d[0]+qd_d[1]), self.a1*l1*np.sin(q_d[1])*(qd_d[0]**2)])
+        g0 = np.array([self.a1*self.gravity[1]*np.cos(q_d[0]+q_d[1])+ self.a4*self.gravity[1]*np.cos(q_d[0]), self.a1*self.gravity[1]*np.cos(q_d[0]+q_d[1])])
+        
+        # Feedback action
+        torque = self.kp @ e + self.kd @ ed + y @ self.theta + m0 @ qdd_d + c0*qd_d + g0 
+
+        # Update rule
+        gainMatrix = np.matrix([[2,0],[0,2]], dtype=np.float64) # TODO: make this a parameter
+        sat_e = np.array([sat(el) for el in e], dtype=np.float64)
+        self.theta = self.theta + gainMatrix @ (y@(sat_e+ed).reshape(-1,1))
+        
+        # Trajectory logging
+        self.append(q_d,qd_d,qdd_d,torque)
+
+        return torque, arrived
     
 if __name__ == "__main__":
     
@@ -140,7 +153,7 @@ if __name__ == "__main__":
     brobot = UncertantTwoLink()
     robot = TwoLink()
     env = PyPlot()
-    goal = [pi/2,0,pi/2]
+    goal = [pi/2,pi/2]
     
     T = 3
     traj = ClippedTrajectory(robot.q, goal, T)
@@ -149,7 +162,7 @@ if __name__ == "__main__":
     loop = Adaptive_ffw(robot, env, [0,-9.81,0])
     
     loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [200,100,100], kd = [100,60,60])
+    loop.setK(kp = [200,100], kd = [100,60])
     
     loop.simulate(dt = 0.01)
     loop.plot()

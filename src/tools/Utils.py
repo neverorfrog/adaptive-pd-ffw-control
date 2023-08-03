@@ -26,3 +26,6 @@ class ClippedTrajectory():
 
     def getTrajList(self):
         return self.functions
+    
+def sat(x, m=1):
+    return min(max(-1, m*x), 1)
