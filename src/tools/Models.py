@@ -4,6 +4,43 @@ import spatialmath.base.symbolic as sym
 import sympy
 from spatialmath import SE3, base
 
+
+class OneLink(DHRobot):
+    """
+    Class that models a 1-link robot (for now planar in the xy plane) with fictituous dynamic parameters
+    """
+
+    def __init__(self, symbolic = False):
+
+        if symbolic:
+            pi = sym.pi()
+            a1, a2 = sympy.symbols("a1 a2")
+            zero = sym.zero()
+        else:
+            from math import pi
+            zero = 0.0
+            a1 = 0.5
+            a2 = 0.5
+        
+        deg = pi / 180
+            
+        #links
+        link1 = RevoluteDH(
+            alpha = 0, #link twist
+            a = 1, #link length
+            d = 0, #offset along the z axis
+            m = 1, #mass of the link
+            r = [0.612,0,0], #position of COM with respect to link frame
+            I=[0, 0, 7.5, 0, 0, 0], #inertia tensor,
+            B = 1, #viscous friction
+            qlim=[-135 * deg, 135 * deg]
+        )
+
+        links = [link1]
+
+        super().__init__(links, name="Planar 1R", keywords=("planar",), symbolic = symbolic)
+        
+
 class TwoLink(DHRobot):
     """
     Class that models a 2-link robot (for now planar in the xy plane) with fictituous dynamic parameters
