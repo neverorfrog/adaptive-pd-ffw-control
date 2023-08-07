@@ -95,7 +95,55 @@ class TwoLink(DHRobot):
     def jacob0(self, q=None, T=None, half=None, start=None, end=None):
         J = DHRobot.jacob0(self,q)
         return J[0:2,:] 
+
+class SymbolicTwoLink(DHRobot):
+    """
+    Class that models a 2-link robot (for now planar in the xy plane) with fictituous dynamic parameters
+    """
+
+    def __init__(self):
+
+        pi = sym.pi()
+        a1, a2, m1, m2, r1x, r1y, r1z, r2x, r2y, r2z, I1xx, I1xy, I1xz, I1yy, I1yz, I1zz, I2xx, I2xy, I2xz, I2yy, I2yz, I2zz = sympy.symbols("a1 a2 m1 m2 r1x r1y r1z r2x r2y r2z I1xx I1xy I1xz I1yy I1yz I1zz I2xx I2xy I2xz I2yy I2yz I2zz")
+        zero = sym.zero()
+
+        deg = pi / 180
+            
+        #links
+        link1 = RevoluteDH(
+            alpha = zero, #link twist
+            a = a1, #link length
+            d = zero, #offset along the z axis
+            m = m1, #mass of the link
+            r = [r1x,r1y,r1z], #position of COM with respect to link frame
+            I=[I1xx, I1xy, I1xz, I1yy, I1yz, I1zz], #inertia tensor,
+            B = zero, #viscous friction
+            qlim=[-135 * deg, 135 * deg] #TODO: is it correct to leave it as a number?
+        )
+        link2 = RevoluteDH(
+            alpha = zero,
+            a = a2,
+            d = zero,
+            m = m2,
+            r = [r2x,r2y,r2z],
+            I=[ I2xx, I2xy, I2xz, I2yy, I2yz, I2zz],
+            B = zero,
+            qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
+        )
+
+        links = [link1, link2]
+
+        super().__init__(links, name="Planar 2R", keywords=("planar",), symbolic = True)
+
+        self.qr = np.array([0, pi / 2])
+        self.qg = np.array([pi / 2, -pi/2])
+
+        self.addconfiguration("qr", self.qr)
+        self.addconfiguration("qg", self.qg)
     
+    def jacob0(self, q=None, T=None, half=None, start=None, end=None):
+        J = DHRobot.jacob0(self,q)
+        return J[0:2,:] 
 
 class ThreeLink(DHRobot):
     """

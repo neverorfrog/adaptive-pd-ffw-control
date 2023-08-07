@@ -153,8 +153,23 @@ class Adaptive_ffw(TrajectoryControl):
 class Adaptive_ffw_10P(TrajectoryControl):
 
     def __init__(self, robot=None, env=None, gravity=[0,0,0]):
-        super().__init__(robot, env, gravity)       
-        self.theta = np.array([5,3]) 
+        super().__init__(robot, env, gravity)
+
+        self.pi = []
+        for link in robot.links:
+            mr = link.m*link.r
+
+            row = np.array([link.m], dtype=np.float64)
+            row = np.concatenate([row, mr])
+            row = np.concatenate([row, link.I[0]])
+            row = np.concatenate([row, link.I[1][1:]])
+            row = np.concatenate([row, link.I[2][2:]])
+
+            self.pi.append(row)
+
+        self.pi = np.array(self.pi)
+
+        exit(0)
                  
     def feedback(self):
 
@@ -185,13 +200,14 @@ if __name__ == "__main__":
     env = PyPlot()
     goal = [pi/2,pi/2]
     
-    T = 3
+    T = 30
     traj = ClippedTrajectory(robot.q, goal, T)
     
     #loop = Feedforward(robot, env, [0,-9.81,0])
-    loop = Adaptive_ffw(robot, env, [0,-9.81,0])
-    
-    loop.setR(reference = traj, goal = goal, threshold = 0.000005)
+    #loop = Adaptive_ffw(robot, env, [0,-9.81,0])
+    loop = Adaptive_ffw_10P(robot, env, [0,-9.81,0])
+
+    loop.setR(reference = traj, goal = goal, threshold = 0.05)
     loop.setK(kp = [200,100], kd = [100,60])
     
     loop.simulate(dt = 0.01)
