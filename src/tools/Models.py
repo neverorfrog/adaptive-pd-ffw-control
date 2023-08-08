@@ -4,24 +4,66 @@ import spatialmath.base.symbolic as sym
 import sympy
 from spatialmath import SE3, base
 
+class SymbolicRobot():
+    
+    def __init__(self, n, robot):
+        
+        self.robot = robot
+        self.n = n
+        zero = sym.zero()
+        q = sym.symbol(f"q(1:{n+1})") #link variables
+        q = sym.symbol(f"q_dot_(1:{n+1})") 
+        a = sym.symbol(f"a(1:{n+1})") #link lenghts
+        
+        #dynamic parameters
+        m = sym.symbol(f"a(1:{n+1})") #link masses
+        dc = sym.symbol(f"dc(1:{n+1})")
+        Ixx = sym.symbol(f"Ixx(1:{n+1})")
+        Iyy = sym.symbol(f"Iyy(1:{n+1})")
+        Izz = sym.symbol(f"Izz(1:{n+1})") 
+        # rx = sym.symbol(f"rx(1:{n+1})") 
+        # ry = sym.symbol(f"ry(1:{n+1})")
+        # rz = sym.symbol(f"rz(1:{n+1})")
+        # Ixy = sym.symbol(f"Ixy(1:{n+1})")
+        # Ixz = sym.symbol(f"Ixz(1:{n+1})")
+        # Iyz = sym.symbol(f"Iyz(1:{n+1})")
+        
+        I = np.full((n,3,3), sym.zero(), dtype = object) #tensor with ith matrix representing inertia matrix of ith COM
+        ri = np.full((n, 3), sym.zero(), dtype = object) #n vectors from RF i-1 to i wrt RF i-1
+        rc = np.full((n, 3), sym.zero(), dtype = object) #n position vectors of COM i seen from RF i
+        rim1c = np.full((n, 3), sym.zero(), dtype = object) #n vectors from RF i-1 to COM as seen from RF i
+        riim1 = np.full((n, 3), sym.zero(), dtype = object) #n vectors from RF i to RF i-1 as seen from RF i
+        Rinv = np.full((n,3,3), sym.zero(), dtype = object) #tensor with ith matrix representing rotation from Rf i to Rf i-1
+        
+        sigma = []
+        for i in range(n):
+            sigma.append(robot.links[i].isprismatic) #check for prismatic joints
+            I[i,:,:] = np.diag([Ixx[i],Iyy[i],Izz[i]]) #diagonal inertias
+            A = robot[i].A(q[i])
+            ri[i,:] = A.t #homogeneus from frame i to i+1
+            Ainv = A.inv()
+            Rinv[i,:,:] = Ainv.R
+            riim1[i,:] = Ainv.t
+
+            if sigma[-1] == 0:
+                ri[ri == 0] = sym.zero()
+                rim1c = Rinv[i,:,:] @ [elem.subs(a[i],dc[i]) for elem in ri[i,:]]
+                rc[i,:] = riim1 + rim1c
+            else:
+                rc[i,:] = [elem.subs(q[i],dc[i]) for elem in riim1[i,:]]
+            
 
 class OneLink(DHRobot):
     """
     Class that models a 1-link robot (for now planar in the xy plane) with fictituous dynamic parameters
     """
 
-    def __init__(self, symbolic = False):
+    def __init__(self):
 
-        if symbolic:
-            pi = sym.pi()
-            a1, a2 = sympy.symbols("a1 a2")
-            zero = sym.zero()
-        else:
-            from math import pi
-            zero = 0.0
-            a1 = 0.5
-            a2 = 0.5
-        
+        from math import pi
+        zero = 0.0
+        a1 = 0.5
+        a2 = 0.5
         deg = pi / 180
             
         #links
@@ -38,7 +80,7 @@ class OneLink(DHRobot):
 
         links = [link1]
 
-        super().__init__(links, name="Planar 1R", keywords=("planar",), symbolic = symbolic)
+        super().__init__(links, name="Planar 1R", keywords=("planar",), symbolic = False)
         
 
 class TwoLink(DHRobot):
@@ -46,18 +88,12 @@ class TwoLink(DHRobot):
     Class that models a 2-link robot (for now planar in the xy plane) with fictituous dynamic parameters
     """
 
-    def __init__(self, symbolic = False):
+    def __init__(self):
 
-        if symbolic:
-            pi = sym.pi()
-            a1, a2 = sympy.symbols("a1 a2")
-            zero = sym.zero()
-        else:
-            from math import pi
-            zero = 0.0
-            a1 = 0.5
-            a2 = 0.5
-        
+        from math import pi
+        zero = 0.0
+        a1 = 0.5
+        a2 = 0.5
         deg = pi / 180
             
         #links
@@ -84,7 +120,7 @@ class TwoLink(DHRobot):
 
         links = [link1, link2]
 
-        super().__init__(links, name="Planar 2R", keywords=("planar",), symbolic = symbolic)
+        super().__init__(links, name="Planar 2R", keywords=("planar",), symbolic = False)
 
         self.qr = np.array([0, pi / 2])
         self.qg = np.array([pi / 2, -pi/2])
@@ -104,34 +140,39 @@ class SymbolicTwoLink(DHRobot):
     def __init__(self):
 
         pi = sym.pi()
-        a1, a2, m1, m2, r1x, r1y, r1z, r2x, r2y, r2z, I1xx, I1xy, I1xz, I1yy, I1yz, I1zz, I2xx, I2xy, I2xz, I2yy, I2yz, I2zz = sympy.symbols("a1 a2 m1 m2 r1x r1y r1z r2x r2y r2z I1xx I1xy I1xz I1yy I1yz I1zz I2xx I2xy I2xz I2yy I2yz I2zz")
+        
+        a = sym.symbol("a1:3")
+        m = sym.symbol("m1:3")
+        
+        rx = sym.symbol("rx1:3")
+        ry = sym.symbol("ry1:3")
+        rz = sym.symbol("rz1:3")
+        
+        Ixx = sym.symbol("Ixx1:3")
+        Iyy = sym.symbol("Iyy1:3")
+        Izz = sym.symbol("Izz1:3")
+        
+        Ixy = sym.symbol("Ixy1:3")
+        Ixz = sym.symbol("Ixz1:3")
+        Iyz = sym.symbol("Iyz1:3")
+        
         zero = sym.zero()
 
         deg = pi / 180
             
         #links
-        link1 = RevoluteDH(
-            alpha = zero, #link twist
-            a = a1, #link length
-            d = zero, #offset along the z axis
-            m = m1, #mass of the link
-            r = [r1x,r1y,r1z], #position of COM with respect to link frame
-            I=[I1xx, I1xy, I1xz, I1yy, I1yz, I1zz], #inertia tensor,
-            B = zero, #viscous friction
-            qlim=[-135 * deg, 135 * deg] #TODO: is it correct to leave it as a number?
-        )
-        link2 = RevoluteDH(
-            alpha = zero,
-            a = a2,
-            d = zero,
-            m = m2,
-            r = [r2x,r2y,r2z],
-            I=[ I2xx, I2xy, I2xz, I2yy, I2yz, I2zz],
-            B = zero,
-            qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
-        )
-
-        links = [link1, link2]
+        links = []
+        for i in range(2):
+            links.append(RevoluteDH(
+                alpha = zero, #link twist
+                a = a[i], #link length
+                d = zero, #offset along the z axis
+                m = m[i], #mass of the link
+                r = [rx[i],ry[i],rz[i]], #position of COM with respect to link frame
+                I=[Ixx[i], Ixy[i], Ixz[i], Iyy[i], Iyz[i], Izz[i]], #inertia tensor
+                B = zero, #viscous friction
+                qlim=[-135 * deg, 135 * deg] #TODO: is it correct to leave it as a number?
+            ))
 
         super().__init__(links, name="Planar 2R", keywords=("planar",), symbolic = True)
 

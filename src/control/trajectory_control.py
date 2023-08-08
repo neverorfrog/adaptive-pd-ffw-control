@@ -86,7 +86,6 @@ class FBL(TrajectoryControl):
         #Current configuration
         q = self.robot.q
         qd = self.robot.qd
-        
 
         #Reference Configuration
         q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
@@ -200,12 +199,12 @@ if __name__ == "__main__":
     env = PyPlot()
     goal = [pi/2,pi/2]
     
-    T = 30
+    T = 3
     traj = ClippedTrajectory(robot.q, goal, T)
     
-    #loop = Feedforward(robot, env, [0,-9.81,0])
+    loop = Feedforward(robot, env, [0,-9.81,0])
     #loop = Adaptive_ffw(robot, env, [0,-9.81,0])
-    loop = Adaptive_ffw_10P(robot, env, [0,-9.81,0])
+    # loop = Adaptive_ffw_10P(robot, env, [0,-9.81,0])
 
     loop.setR(reference = traj, goal = goal, threshold = 0.05)
     loop.setK(kp = [200,100], kd = [100,60])
