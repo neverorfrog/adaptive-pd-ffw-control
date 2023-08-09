@@ -19,16 +19,8 @@ class EulerLagrange():
 
         # dynamic parameters
         g0 = sym.symbol("g")
-        m = sym.symbol(f"m(1:{n+1})")  # link masses
         dc = sym.symbol(f"dc(1:{n+1})")
-        Ixx = sym.symbol(f"Ixx(1:{n+1})")
-        Iyy = sym.symbol(f"Iyy(1:{n+1})")
-        Izz = sym.symbol(f"Izz(1:{n+1})")
-        # Ixy = sym.symbol(f"Ixy(1:{n+1})")
-        # Ixz = sym.symbol(f"Ixz(1:{n+1})")
-        # Iyz = sym.symbol(f"Iyz(1:{n+1})")
 
-        I = np.full((3,3), sym.zero(), dtype = object) #ith matrix representing inertia matrix of ith COM
         ri = np.full((3,), sym.zero(), dtype = object) #vector from RF i-1 to i wrt RF i-1
         rc = np.full((3,), sym.zero(), dtype = object) #position vector of COM i seen from RF i
         rim1c = np.full((3,), sym.zero(), dtype = object) #vector from RF i-1 to COM as seen from RF i
@@ -44,7 +36,6 @@ class EulerLagrange():
             offset = 10*i
             #Preprocessing
             sigma = int(robot.links[i].isprismatic) #check for prismatic joints
-            I = np.diag([Ixx[i],Iyy[i],Izz[i]]) #diagonal inertias
             A = robot[i].A(q[i]) #homogeneus transformation from frame i to i+1
             ri = A.t
             Ainv = A.inv()
@@ -57,14 +48,13 @@ class EulerLagrange():
                 rc = riim1 + rim1c
             else:
                 rc = [elem.subs(q[i],dc[i]) for elem in riim1]
-            rc = sym.simplify(rc)
                 
             #Kinetic Energy
             w_im1 = w + (1-sigma) * q_d[i] * np.array([0,0,1]) #omega of link i wrt RF i-1 (3 x 1) 
-            w = sym.simplify(Rinv @ w_im1)
+            w = Rinv @ w_im1
             v_im1 = v + sigma * q_d[i] * np.array([0,0,1]) + np.cross(w_im1, ri) #linear v of link i wrt RF i-1
-            v = sym.simplify(Rinv @ v_im1); 
-            vc = sym.simplify(v + np.cross(w,rc))
+            v = Rinv @ v_im1; 
+            vc = v + np.cross(w,rc)
 
             ivi = vc + np.matmul(skew(rc), w)
             mirci = np.array(pi[offset+1:offset+4])
@@ -72,9 +62,7 @@ class EulerLagrange():
             I_link = np.diag([pi[offset+4], pi[offset+7], pi[offset+9]])
             Ti = 0.5*pi[offset+0]*np.matmul(ivi.T, ivi) + np.matmul(np.matmul(mirci, skew(ivi)), w) + 0.5*np.matmul(np.matmul(w, I_link), w)
 
-            #Ti = 0.5*(m[i]*np.matmul(vc, vc) + np.matmul(np.matmul(w, I), w))
-            #Ti = sympy.simplify(sympy.collect(sympy.expand(Ti),[*q_d]))
-            T = sym.simplify(T + Ti)
+            T = T + Ti
             
             #Potential Energy
             rot0i = robot.A(i,q).R #transformation from RF 0 to RF i+1
@@ -99,14 +87,14 @@ class EulerLagrange():
         M = sympy.Matrix(self.M)
         for i in range(n):
             C_temp = M[:,i].jacobian(q)
-            C = sym.simplify(0.5 * (C_temp + C_temp.T - M.diff(q[i])))
-            self.c[i] = sym.simplify(np.matmul(np.matmul(q_d, C),q_d))
+            C = 0.5 * (C_temp + C_temp.T - M.diff(q[i]))
+            self.c[i] = np.matmul(np.matmul(q_d, C),q_d)
             self.g[i] = -U.diff(q[i])
     
 
     def getDynamicModel(self):
         q_d_d = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
-        return sym.simplify(np.matmul(self.M,q_d_d)+ self.c + self.g)
+        return np.matmul(self.M,q_d_d)+ self.c + self.g
             
 
 class OneLink(DHRobot):

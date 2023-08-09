@@ -190,7 +190,7 @@ class Feedforward_TESTING(TrajectoryControl):
         '''
         assert(np.sum(fDM-corkeModel) < 1e-10)
 
-        return [1,1] , False
+        return [1,1,1] , False
     
 
 class FBL(TrajectoryControl):
@@ -312,22 +312,22 @@ if __name__ == "__main__":
     
     #robot and environment creation
     brobot = UncertantTwoLink()
-    robot = TwoLink()
+    robot = ThreeLink()
     env = PyPlot()
-    goal = [pi/2,pi/2]
+    goal = [pi/2,pi/2,0]
     
     T = 3
     traj = ClippedTrajectory(robot.q, goal, T)
 
-    symrobot = SymbolicPlanarRobot(2)
-    model = EulerLagrange(2, robot = symrobot)
+    symrobot = SymbolicPlanarRobot(3)
+    model = EulerLagrange(3, robot = symrobot)
     
     loop = Feedforward_TESTING(robot, env, model, [0,-9.81,0])
     #loop = Adaptive_ffw(robot, env, [0,-9.81,0])
     # loop = Adaptive_ffw_10P(robot, env, [0,-9.81,0])
 
     loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [200,100], kd = [100,60])
+    loop.setK(kp = [200,100,100], kd = [100,60,60])
     
     loop.simulate(dt = 0.01)
     loop.plot()
