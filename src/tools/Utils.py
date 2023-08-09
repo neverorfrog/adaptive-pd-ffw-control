@@ -42,3 +42,8 @@ def coeff_dict(expr, *vars):
         assert 1 not in rv
         rv.update({S.One: i})
     return rv
+
+def skew(vector):
+    return np.array([[0, -vector[2], vector[1]], 
+                     [vector[2], 0, -vector[0]], 
+                     [-vector[1], vector[0], 0]])

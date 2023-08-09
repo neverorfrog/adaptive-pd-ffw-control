@@ -3,7 +3,7 @@ import numpy as np
 import spatialmath.base.symbolic as sym
 import sympy
 from spatialmath import SE3, base
-from tools.Utils import index2var, coeff_dict
+from tools.Utils import skew, index2var, coeff_dict
 
 class EulerLagrange():
 
@@ -14,6 +14,8 @@ class EulerLagrange():
         q = sym.symbol(f"q(1:{n+1})")  # link variables
         q_d = sym.symbol(f"q_dot_(1:{n+1})")
         a = sym.symbol(f"a(1:{n+1})")  # link lenghts
+
+        pi = sym.symbol(f"pi_(1:{10*n+1})")
 
         # dynamic parameters
         g0 = sym.symbol("g")
@@ -40,6 +42,7 @@ class EulerLagrange():
         
 
         for i in range(n):
+            offset = 10*i
             #Preprocessing
             sigma = int(robot.links[i].isprismatic) #check for prismatic joints
             I = np.diag([Ixx[i],Iyy[i],Izz[i]]) #diagonal inertias
@@ -63,15 +66,22 @@ class EulerLagrange():
             v_im1 = v + sigma * q_d[i] * np.array([0,0,1]) + np.cross(w_im1, ri) #linear v of link i wrt RF i-1
             v = sym.simplify(Rinv @ v_im1); 
             vc = sym.simplify(v + np.cross(w,rc))
-            Ti = 0.5*(m[i]*np.matmul(vc, vc) + np.matmul(np.matmul(w, I), w))
-            Ti = sympy.simplify(sympy.collect(sympy.expand(Ti),[*q_d]))
+
+            ivi = vc + np.matmul(skew(rc), w)
+            mirci = np.array(pi[offset+1:offset+4]) # TODO: maybe transpose ??? 
+
+            I_link = np.diag([pi[offset+4], pi[offset+7], pi[offset+9]])
+            Ti = 0.5*pi[offset+0]*np.matmul(ivi.T, ivi) + np.matmul(np.matmul(mirci, skew(ivi)), w) + 0.5*np.matmul(np.matmul(w, I_link), w)
+
+            #Ti = 0.5*(m[i]*np.matmul(vc, vc) + np.matmul(np.matmul(w, I), w))
+            #Ti = sympy.simplify(sympy.collect(sympy.expand(Ti),[*q_d]))
             T = sym.simplify(T + Ti)
             
             #Potential Energy
-            hom = robot.A(i,q).A #transformation from RF 0 to RF i+1
+            rot0i = robot.A(i,q).R #transformation from RF 0 to RF i+1
             rc = np.array([*rc , 1])
-            r0ci = sym.simplify(hom@rc)[:-1]
-            Ui = sym.simplify(-m[i]* np.matmul(gv,r0ci))
+            Ui = -pi[offset+0]*np.matmul(gv,ri) - np.matmul(gv, np.matmul(rot0i,mirci))
+            #Ui = sym.simplify(-m[i]* np.matmul(gv,r0ci))
             U = U + Ui
             
         
@@ -90,6 +100,11 @@ class EulerLagrange():
             C = sym.simplify(0.5 * (C_temp + C_temp.T - M.diff(q[i])))
             self.c[i] = sym.simplify(np.matmul(np.matmul(q_d, C),q_d))
             self.g[i] = U.diff(q[i])
+    
+
+    def getDynamicModel(self):
+        q_d_d = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
+        return sym.simplify(self.M*q_d_d + self.c + self.g)
             
 
 class OneLink(DHRobot):

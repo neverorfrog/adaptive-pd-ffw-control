@@ -75,6 +75,66 @@ class Feedforward(TrajectoryControl):
 
         return torque , arrived
     
+class Feedforward_TESTING(TrajectoryControl):
+
+    def __init__(self, robot=None, env=None, dynamicModel=None, gravity=[0,0,0]):
+        super().__init__(robot, env, gravity)
+        self.dynamicModel = dynamicModel
+         
+    def feedback(self):
+        '''Computes the torque necessary to reach the reference position'''
+
+        n = len(self.robot.links)
+
+        q_sym = sym.symbol(f"q(1:{n+1})")  # link variables
+        q_d_sym = sym.symbol(f"q_dot_(1:{n+1})")
+        a_sym = sym.symbol(f"a(1:{n+1})")  # link lenghts
+
+        pi_sym = sym.symbol(f"pi_(1:{10*n+1})")
+
+        # dynamic parameters
+        g0_sym = sym.symbol("g")
+        m_sym = sym.symbol(f"m(1:{n+1})")  # link masses
+        dc_sym = sym.symbol(f"dc(1:{n+1})")
+        Ixx_sym = sym.symbol(f"Ixx(1:{n+1})")
+        Iyy_sym = sym.symbol(f"Iyy(1:{n+1})")
+        Izz_sym = sym.symbol(f"Izz(1:{n+1})")
+        
+        #Current configuration
+        q = self.robot.q
+        qd = self.robot.qd        
+
+        print("GROUND TRUTH: ")
+        print(self.robot.inertia(q))
+        print("=================================================================")
+        
+        Msym = sympy.Matrix(self.dynamicModel.M)
+
+        for i in range(n):
+            offset = 10*i
+
+            I_link = self.robot.links[i].I + self.robot.links[i].m*np.matmul(skew(self.robot.links[i].r).T, skew(self.robot.links[i].r))
+            mr = self.robot.links[i].m*self.robot.links[i].r
+
+            Msym = Msym.subs(q_sym[i], q[i])
+            Msym = Msym.subs(a_sym[i], self.robot.links[i].a)
+            Msym = Msym.subs(pi_sym[offset+0], self.robot.links[i].m)
+
+            Msym = Msym.subs(pi_sym[offset+4], I_link[0,0])
+            Msym = Msym.subs(pi_sym[offset+7], I_link[1,1])
+            Msym = Msym.subs(pi_sym[offset+9], I_link[2,2])
+
+            Msym = Msym.subs(pi_sym[offset+1], mr[0])
+            Msym = Msym.subs(pi_sym[offset+2], mr[1])
+            Msym = Msym.subs(pi_sym[offset+3], mr[2])
+
+        print(Msym)
+        exit(0)
+        print("PREDICTION: ")
+        print(Msym)
+
+        return [1,1] , False
+    
 
 class FBL(TrajectoryControl):
 
@@ -201,8 +261,11 @@ if __name__ == "__main__":
     
     T = 3
     traj = ClippedTrajectory(robot.q, goal, T)
+
+    symrobot = SymbolicPlanarRobot(2)
+    model = EulerLagrange(2, robot = symrobot)
     
-    loop = Feedforward(robot, env, [0,-9.81,0])
+    loop = Feedforward_TESTING(robot, env, model, [0,-9.81,0])
     #loop = Adaptive_ffw(robot, env, [0,-9.81,0])
     # loop = Adaptive_ffw_10P(robot, env, [0,-9.81,0])
 
