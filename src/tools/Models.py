@@ -11,11 +11,14 @@ class EulerLagrange():
 
         self.robot = robot
         self.n = n
+        self.Y = None
+        self.dynamicModel = None
+
         q = sym.symbol(f"q(1:{n+1})")  # link variables
         q_d = sym.symbol(f"q_dot_(1:{n+1})")
         a = sym.symbol(f"a(1:{n+1})")  # link lenghts
 
-        pi = sym.symbol(f"pi_(1:{10*n+1})")
+        self.pi = sym.symbol(f"pi_(1:{10*n+1})")
 
         # dynamic parameters
         g0 = sym.symbol("g")
@@ -57,10 +60,10 @@ class EulerLagrange():
             vc = v + np.cross(w,rc)
 
             ivi = vc + np.matmul(skew(rc), w)
-            mirci = np.array(pi[offset+1:offset+4])
+            mirci = np.array(self.pi[offset+1:offset+4])
 
-            I_link = np.diag([pi[offset+4], pi[offset+7], pi[offset+9]])
-            Ti = 0.5*pi[offset+0]*np.matmul(ivi.T, ivi) + np.matmul(np.matmul(mirci, skew(ivi)), w) + 0.5*np.matmul(np.matmul(w, I_link), w)
+            I_link = np.diag([self.pi[offset+4], self.pi[offset+7], self.pi[offset+9]])
+            Ti = 0.5*self.pi[offset+0]*np.matmul(ivi.T, ivi) + np.matmul(np.matmul(mirci, skew(ivi)), w) + 0.5*np.matmul(np.matmul(w, I_link), w)
 
             T = T + Ti
             
@@ -70,7 +73,7 @@ class EulerLagrange():
 
             r0i = robot.A(i,q).t
 
-            Ui = -pi[offset+0]*np.matmul(gv,r0i) - np.matmul(gv, np.matmul(rot0i,mirci))
+            Ui = -self.pi[offset+0]*np.matmul(gv,r0i) - np.matmul(gv, np.matmul(rot0i,mirci))
 
             U = U + Ui            
         
@@ -94,13 +97,29 @@ class EulerLagrange():
 
     def getDynamicModel(self):
         q_d_d = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
-        return np.matmul(self.M,q_d_d)+ self.c + self.g
+        if self.dynamicModel == None:
+            self.dynamicModel = np.matmul(self.M,q_d_d)+ self.c + self.g
+        return self.dynamicModel
     
     # Return the linear parametrization Y matrix such that Y*pi = tau
     def getY(self, simplify = False):
-        pi = sym.symbol(f"pi_(1:{10*self.n+1})")
-        symModel = sympy.Matrix(self.getDynamicModel())
-        return sym.simplify(symModel.jacobian(pi)) if simplify else symModel.jacobian(pi)
+        if self.Y == None:
+            symModel = sympy.Matrix(self.getDynamicModel())
+            self.Y = sym.simplify(symModel.jacobian(self.pi)) if simplify else symModel.jacobian(self.pi)
+        return self.Y
+    
+    def evaluateY(self, q, qd, qdd):
+        actualY = self.Y
+        q_sym = sym.symbol(f"q(1:{self.n+1})")  # link variables
+        q_d_sym = sym.symbol(f"q_dot_(1:{self.n+1})")
+        q_d_d_sym = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
+
+        for i in range(self.n):
+            actualY = actualY.subs(q_sym[i], q[i])
+            actualY = actualY.subs(q_d_sym[i], qd[i])
+            actualY = actualY.subs(q_d_d_sym[i], qdd[i])
+        
+        return actualY
             
 
 class OneLink(DHRobot):
