@@ -81,116 +81,92 @@ class Feedforward_TESTING(TrajectoryControl):
     def __init__(self, robot=None, env=None, dynamicModel=None, gravity=[0,0,0]):
         super().__init__(robot, env, gravity)
         self.dynamicModel = dynamicModel
+
+        n = len(self.robot.links)
+        a_sym = sym.symbol(f"a(1:{n+1})")
+        g0_sym = sym.symbol("g")
+
+        self.pi_sym = sym.symbol(f"pi_(1:{10*n+1})")
+        self.pi = np.zeros(10*n)
+        self.beliefPi = np.zeros(10*n)
+
+        dynamicModel.getY()
+        dynamicModel.Y = dynamicModel.Y.subs(g0_sym, gravity[1])
+        for i in range(n):
+            shift = 10*i
+            dynamicModel.Y = dynamicModel.Y.subs(a_sym[i], self.robot.links[i].a)
+
+            I_link = self.robot.links[i].I + self.robot.links[i].m*np.matmul(skew(self.robot.links[i].r).T, skew(self.robot.links[i].r))
+            mr = self.robot.links[i].m*self.robot.links[i].r #+ np.random.normal(0,1,3)
+
+            self.pi[shift+0] = self.robot.links[i].m 
+            self.beliefPi[shift+0] = self.pi[shift+0] + np.random.normal(0,10,1)
+
+            self.pi[shift+1] = mr[0]
+            self.beliefPi[shift+1] = self.pi[shift+1]
+
+            self.pi[shift+2] = mr[1]
+            self.beliefPi[shift+2] = self.pi[shift+2]
+
+            self.pi[shift+3] = mr[2]
+            self.beliefPi[shift+3] = self.pi[shift+3]
+
+            self.pi[shift+4] = I_link[0,0] 
+            self.beliefPi[shift+4] = self.pi[shift+4] + np.random.normal(0,10,1)
+
+            self.pi[shift+5] = 0
+            self.beliefPi[shift+5] = self.pi[shift+5]
+
+            self.pi[shift+6] = 0
+            self.beliefPi[shift+6] = self.pi[shift+6]
+
+            self.pi[shift+7] = I_link[1,1]
+            self.beliefPi[shift+7] = self.pi[shift+7] + np.random.normal(0,10,1)
+
+            self.pi[shift+8] = 0
+            self.beliefPi[shift+8] = self.pi[shift+8]
+
+            self.pi[shift+9] = I_link[2,2]
+            self.beliefPi[shift+9] = self.pi[shift+9] + np.random.normal(0,10,1)
+        
          
     def feedback(self):
         '''Computes the torque necessary to reach the reference position'''
 
         n = len(self.robot.links)
 
-        q_sym = sym.symbol(f"q(1:{n+1})")  # link variables
-        q_d_sym = sym.symbol(f"q_dot_(1:{n+1})")
-        q_d_d_sym = sym.symbol(f"q_dot_dot_(1:{n+1})")
-        a_sym = sym.symbol(f"a(1:{n+1})")  # link lenghts
 
-        pi_sym = sym.symbol(f"pi_(1:{10*n+1})")
-
-        # dynamic parameters
-        g0_sym = sym.symbol("g")
-        m_sym = sym.symbol(f"m(1:{n+1})")  # link masses
-        dc_sym = sym.symbol(f"dc(1:{n+1})")
-        Ixx_sym = sym.symbol(f"Ixx(1:{n+1})")
-        Iyy_sym = sym.symbol(f"Iyy(1:{n+1})")
-        Izz_sym = sym.symbol(f"Izz(1:{n+1})")
-        
         #Current configuration
         q = self.robot.q
         qd = self.robot.qd
         qdd = self.robot.qdd
-        
-        DMsym = sympy.Matrix(self.dynamicModel.getDynamicModel())
-        #Msym = sympy.Matrix(self.dynamicModel.M)
-        #Csym = sympy.Matrix(self.dynamicModel.c)
-        #Gsym = sympy.Matrix(self.dynamicModel.g)
 
-        for i in range(n):
-            offset = 10*i
+        #Reference Configuration
+        q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
 
-            I_link = self.robot.links[i].I + self.robot.links[i].m*np.matmul(skew(self.robot.links[i].r).T, skew(self.robot.links[i].r))
-            mr = self.robot.links[i].m*self.robot.links[i].r
+        #Error
+        e = q_d - q
+        ed = qd_d - qd
+        arrived = self.check_termination(e,ed)
 
-            DMsym = DMsym.subs(q_sym[i], q[i])
-            DMsym = DMsym.subs(q_d_sym[i], qd[i])
-            DMsym = DMsym.subs(q_d_d_sym[i], qdd[i])
-            DMsym = DMsym.subs(g0_sym, self.gravity[1])
-            DMsym = DMsym.subs(a_sym[i], self.robot.links[i].a)
-            DMsym = DMsym.subs(pi_sym[offset+0], self.robot.links[i].m)
-            DMsym = DMsym.subs(pi_sym[offset+4], I_link[0,0])
-            DMsym = DMsym.subs(pi_sym[offset+7], I_link[1,1])
-            DMsym = DMsym.subs(pi_sym[offset+9], I_link[2,2])
-            DMsym = DMsym.subs(pi_sym[offset+1], mr[0])
-            DMsym = DMsym.subs(pi_sym[offset+2], mr[1])
-            DMsym = DMsym.subs(pi_sym[offset+3], mr[2])
-            '''
-            Msym = Msym.subs(q_sym[i], q[i])
-            Msym = Msym.subs(q_d_sym[i], qd[i])
-            Msym = Msym.subs(q_d_d_sym[i], qdd[i])
-            Msym = Msym.subs(g0_sym, self.gravity[1])
-            Msym = Msym.subs(a_sym[i], self.robot.links[i].a)
-            Msym = Msym.subs(pi_sym[offset+0], self.robot.links[i].m)
-            Msym = Msym.subs(pi_sym[offset+4], I_link[0,0])
-            Msym = Msym.subs(pi_sym[offset+7], I_link[1,1])
-            Msym = Msym.subs(pi_sym[offset+9], I_link[2,2])
-            Msym = Msym.subs(pi_sym[offset+1], mr[0])
-            Msym = Msym.subs(pi_sym[offset+2], mr[1])
-            Msym = Msym.subs(pi_sym[offset+3], mr[2])
+        print(e)
 
-            Csym = Csym.subs(q_sym[i], q[i])
-            Csym = Csym.subs(q_d_sym[i], qd[i])
-            Csym = Csym.subs(q_d_d_sym[i], qdd[i])
-            Csym = Csym.subs(g0_sym, self.gravity[1])
-            Csym = Csym.subs(a_sym[i], self.robot.links[i].a)
-            Csym = Csym.subs(pi_sym[offset+0], self.robot.links[i].m)
-            Csym = Csym.subs(pi_sym[offset+4], I_link[0,0])
-            Csym = Csym.subs(pi_sym[offset+7], I_link[1,1])
-            Csym = Csym.subs(pi_sym[offset+9], I_link[2,2])
-            Csym = Csym.subs(pi_sym[offset+1], mr[0])
-            Csym = Csym.subs(pi_sym[offset+2], mr[1])
-            Csym = Csym.subs(pi_sym[offset+3], mr[2])
+        actualY = self.dynamicModel.evaluateY(q_d, qd_d, qdd_d)
+    
+        torque = self.kp @ e + self.kd @ ed + np.matmul(actualY, self.pi).astype(np.float64)
 
-            Gsym = Gsym.subs(q_sym[i], q[i])
-            Gsym = Gsym.subs(q_d_sym[i], qd[i])
-            Gsym = Gsym.subs(q_d_d_sym[i], qdd[i])
-            Gsym = Gsym.subs(g0_sym, self.gravity[1])
-            Gsym = Gsym.subs(a_sym[i], self.robot.links[i].a)
-            Gsym = Gsym.subs(pi_sym[offset+0], self.robot.links[i].m)
-            Gsym = Gsym.subs(pi_sym[offset+4], I_link[0,0])
-            Gsym = Gsym.subs(pi_sym[offset+7], I_link[1,1])
-            Gsym = Gsym.subs(pi_sym[offset+9], I_link[2,2])
-            Gsym = Gsym.subs(pi_sym[offset+1], mr[0])
-            Gsym = Gsym.subs(pi_sym[offset+2], mr[1])
-            Gsym = Gsym.subs(pi_sym[offset+3], mr[2])
-            '''
+        # Update rule
+        gainMatrix = np.eye(n*10) # TODO: make this a parameter
+        sat_e = np.array([sat(el) for el in e], dtype=np.float64)
 
-        fDM = np.array(DMsym).astype(np.float64).T[0]
-        '''
-        fM = np.array(Msym).astype(np.float64)
-        fC = np.array(Csym).astype(np.float64).T[0]
-        fG = np.array(Gsym).astype(np.float64).T[0]
-        '''
+        deltaPi = gainMatrix @ (actualY.T@(sat_e+ed))
 
-        corkeModel = self.robot.inertia(q) @ qdd + self.robot.coriolis(q, qd) @ qd + self.robot.gravload(q, gravity = self.gravity)
+        self.beliefPi = self.beliefPi + deltaPi
 
-        '''
-        data = [["complete model",(str)(corkeModel), (str)(fDM), (str)(np.sum(fDM-corkeModel))],
-                ["Intertia matrix",(str)(self.robot.inertia(q)), (str)(fM), (str)(np.sum(fM-self.robot.inertia(q)))],
-                ["C",(str)(self.robot.coriolis(q, qd)@qd), (str)(fC), (str)(np.sum(fC-self.robot.coriolis(q, qd)@qd))],
-                ["Gravity",(str)(self.robot.gravload(q, gravity = self.gravity)), (str)(fG), (str)(np.sum(fG-self.robot.gravload(q, gravity = self.gravity)))]]
-        
-        print(tabulate(data, headers=["", "Corke", "Our", "Error"]))
-        '''
-        assert(np.sum(fDM-corkeModel) < 1e-10)
+        # Trajectory logging
+        self.append(q_d,qd_d,qdd_d,torque)
 
-        return [1,1,1] , False
+        return torque , arrived
     
 
 class FBL(TrajectoryControl):
@@ -265,56 +241,13 @@ class Adaptive_ffw(TrajectoryControl):
 
         return torque, arrived
     
-
-class Adaptive_ffw_10P(TrajectoryControl):
-
-    def __init__(self, robot=None, env=None, gravity=[0,0,0]):
-        super().__init__(robot, env, gravity)
-
-        self.pi = []
-        for link in robot.links:
-            mr = link.m*link.r
-
-            row = np.array([link.m], dtype=np.float64)
-            row = np.concatenate([row, mr])
-            row = np.concatenate([row, link.I[0]])
-            row = np.concatenate([row, link.I[1][1:]])
-            row = np.concatenate([row, link.I[2][2:]])
-
-            self.pi.append(row)
-
-        self.pi = np.array(self.pi)
-
-        exit(0)
-                 
-    def feedback(self):
-
-        #Current configuration
-        q = self.robot.q
-        qd = self.robot.qd
-        
-        #Reference Configuration
-        q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
-
-        #Error
-        e = q_d - q
-        ed = qd_d - qd
-        arrived = self.check_termination(e,ed)
-        
-        torque = [1,1]
-        
-        # Trajectory logging
-        self.append(q_d,qd_d,qdd_d,torque)
-
-        return torque, arrived
-    
 if __name__ == "__main__":
     
     #robot and environment creation
     brobot = UncertantTwoLink()
     robot = ThreeLink()
     env = PyPlot()
-    goal = [pi/2,pi/2,0]
+    goal = [pi/2,pi/2,pi/2]
     
     T = 3
     traj = ClippedTrajectory(robot.q, goal, T)
@@ -327,7 +260,7 @@ if __name__ == "__main__":
     # loop = Adaptive_ffw_10P(robot, env, [0,-9.81,0])
 
     loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [200,100,100], kd = [100,60,60])
+    loop.setK(kp = [200,100,100], kd = [60,60,60])
     
     loop.simulate(dt = 0.01)
     loop.plot()

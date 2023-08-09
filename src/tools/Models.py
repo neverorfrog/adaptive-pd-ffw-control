@@ -93,20 +93,18 @@ class EulerLagrange():
             C = 0.5 * (C_temp + C_temp.T - M.diff(q[i]))
             self.c[i] = np.matmul(np.matmul(q_d, C),q_d)
             self.g[i] = -U.diff(q[i])
+
+        symModel = sympy.Matrix(self.getDynamicModel())
+        self.Y = symModel.jacobian(self.pi)
     
 
     def getDynamicModel(self):
         q_d_d = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
-        if self.dynamicModel == None:
-            self.dynamicModel = np.matmul(self.M,q_d_d)+ self.c + self.g
-        return self.dynamicModel
+        return np.matmul(self.M,q_d_d)+ self.c + self.g
     
     # Return the linear parametrization Y matrix such that Y*pi = tau
     def getY(self, simplify = False):
-        if self.Y == None:
-            symModel = sympy.Matrix(self.getDynamicModel())
-            self.Y = sym.simplify(symModel.jacobian(self.pi)) if simplify else symModel.jacobian(self.pi)
-        return self.Y
+        return sym.simplify(self.Y) if simplify else self.Y
     
     def evaluateY(self, q, qd, qdd):
         actualY = self.Y
