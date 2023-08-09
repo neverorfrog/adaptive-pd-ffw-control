@@ -1,5 +1,6 @@
 import numpy as np
 from roboticstoolbox.tools.trajectory import *
+from sympy import Add, poly, S
 
 class ClippedTrajectory():
     def __init__(self, functions, T) -> None:
@@ -29,3 +30,15 @@ class ClippedTrajectory():
     
 def sat(x, m=1):
     return min(max(-1, m*x), 1)
+
+def index2var(row, column, vars):
+    return vars[row]*vars[column]
+
+def coeff_dict(expr, *vars):
+    collected = poly(expr, *vars).as_expr()
+    i, d = collected.as_independent(*vars, as_Add=True)
+    rv = dict(i.as_independent(*vars, as_Mul=True)[::-1] for i in Add.make_args(d))
+    if i:
+        assert 1 not in rv
+        rv.update({S.One: i})
+    return rv
