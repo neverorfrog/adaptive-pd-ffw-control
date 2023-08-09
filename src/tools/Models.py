@@ -95,6 +95,12 @@ class EulerLagrange():
     def getDynamicModel(self):
         q_d_d = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
         return np.matmul(self.M,q_d_d)+ self.c + self.g
+    
+    # Return the linear parametrization Y matrix such that Y*pi = tau
+    def getY(self, simplify = False):
+        pi = sym.symbol(f"pi_(1:{10*self.n+1})")
+        symModel = sympy.Matrix(self.getDynamicModel())
+        return sym.simplify(symModel.jacobian(pi)) if simplify else symModel.jacobian(pi)
             
 
 class OneLink(DHRobot):
