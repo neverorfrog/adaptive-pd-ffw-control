@@ -5,6 +5,7 @@ from roboticstoolbox.backends.PyPlot import PyPlot
 from math import pi
 from roboticstoolbox.tools.trajectory import *
 from tools.Utils import *
+from tabulate import tabulate
 
 
 class TrajectoryControl(Control):
@@ -88,6 +89,7 @@ class Feedforward_TESTING(TrajectoryControl):
 
         q_sym = sym.symbol(f"q(1:{n+1})")  # link variables
         q_d_sym = sym.symbol(f"q_dot_(1:{n+1})")
+        q_d_d_sym = sym.symbol(f"q_dot_dot_(1:{n+1})")
         a_sym = sym.symbol(f"a(1:{n+1})")  # link lenghts
 
         pi_sym = sym.symbol(f"pi_(1:{10*n+1})")
@@ -102,13 +104,13 @@ class Feedforward_TESTING(TrajectoryControl):
         
         #Current configuration
         q = self.robot.q
-        qd = self.robot.qd        
-
-        print("GROUND TRUTH: ")
-        print(self.robot.inertia(q))
-        print("=================================================================")
+        qd = self.robot.qd
+        qdd = self.robot.qdd
         
-        Msym = sympy.Matrix(self.dynamicModel.M)
+        DMsym = sympy.Matrix(self.dynamicModel.getDynamicModel())
+        #Msym = sympy.Matrix(self.dynamicModel.M)
+        #Csym = sympy.Matrix(self.dynamicModel.c)
+        #Gsym = sympy.Matrix(self.dynamicModel.g)
 
         for i in range(n):
             offset = 10*i
@@ -116,22 +118,77 @@ class Feedforward_TESTING(TrajectoryControl):
             I_link = self.robot.links[i].I + self.robot.links[i].m*np.matmul(skew(self.robot.links[i].r).T, skew(self.robot.links[i].r))
             mr = self.robot.links[i].m*self.robot.links[i].r
 
+            DMsym = DMsym.subs(q_sym[i], q[i])
+            DMsym = DMsym.subs(q_d_sym[i], qd[i])
+            DMsym = DMsym.subs(q_d_d_sym[i], qdd[i])
+            DMsym = DMsym.subs(g0_sym, self.gravity[1])
+            DMsym = DMsym.subs(a_sym[i], self.robot.links[i].a)
+            DMsym = DMsym.subs(pi_sym[offset+0], self.robot.links[i].m)
+            DMsym = DMsym.subs(pi_sym[offset+4], I_link[0,0])
+            DMsym = DMsym.subs(pi_sym[offset+7], I_link[1,1])
+            DMsym = DMsym.subs(pi_sym[offset+9], I_link[2,2])
+            DMsym = DMsym.subs(pi_sym[offset+1], mr[0])
+            DMsym = DMsym.subs(pi_sym[offset+2], mr[1])
+            DMsym = DMsym.subs(pi_sym[offset+3], mr[2])
+            '''
             Msym = Msym.subs(q_sym[i], q[i])
+            Msym = Msym.subs(q_d_sym[i], qd[i])
+            Msym = Msym.subs(q_d_d_sym[i], qdd[i])
+            Msym = Msym.subs(g0_sym, self.gravity[1])
             Msym = Msym.subs(a_sym[i], self.robot.links[i].a)
             Msym = Msym.subs(pi_sym[offset+0], self.robot.links[i].m)
-
             Msym = Msym.subs(pi_sym[offset+4], I_link[0,0])
             Msym = Msym.subs(pi_sym[offset+7], I_link[1,1])
             Msym = Msym.subs(pi_sym[offset+9], I_link[2,2])
-
             Msym = Msym.subs(pi_sym[offset+1], mr[0])
             Msym = Msym.subs(pi_sym[offset+2], mr[1])
             Msym = Msym.subs(pi_sym[offset+3], mr[2])
 
-        print(Msym)
-        exit(0)
-        print("PREDICTION: ")
-        print(Msym)
+            Csym = Csym.subs(q_sym[i], q[i])
+            Csym = Csym.subs(q_d_sym[i], qd[i])
+            Csym = Csym.subs(q_d_d_sym[i], qdd[i])
+            Csym = Csym.subs(g0_sym, self.gravity[1])
+            Csym = Csym.subs(a_sym[i], self.robot.links[i].a)
+            Csym = Csym.subs(pi_sym[offset+0], self.robot.links[i].m)
+            Csym = Csym.subs(pi_sym[offset+4], I_link[0,0])
+            Csym = Csym.subs(pi_sym[offset+7], I_link[1,1])
+            Csym = Csym.subs(pi_sym[offset+9], I_link[2,2])
+            Csym = Csym.subs(pi_sym[offset+1], mr[0])
+            Csym = Csym.subs(pi_sym[offset+2], mr[1])
+            Csym = Csym.subs(pi_sym[offset+3], mr[2])
+
+            Gsym = Gsym.subs(q_sym[i], q[i])
+            Gsym = Gsym.subs(q_d_sym[i], qd[i])
+            Gsym = Gsym.subs(q_d_d_sym[i], qdd[i])
+            Gsym = Gsym.subs(g0_sym, self.gravity[1])
+            Gsym = Gsym.subs(a_sym[i], self.robot.links[i].a)
+            Gsym = Gsym.subs(pi_sym[offset+0], self.robot.links[i].m)
+            Gsym = Gsym.subs(pi_sym[offset+4], I_link[0,0])
+            Gsym = Gsym.subs(pi_sym[offset+7], I_link[1,1])
+            Gsym = Gsym.subs(pi_sym[offset+9], I_link[2,2])
+            Gsym = Gsym.subs(pi_sym[offset+1], mr[0])
+            Gsym = Gsym.subs(pi_sym[offset+2], mr[1])
+            Gsym = Gsym.subs(pi_sym[offset+3], mr[2])
+            '''
+
+        fDM = np.array(DMsym).astype(np.float64).T[0]
+        '''
+        fM = np.array(Msym).astype(np.float64)
+        fC = np.array(Csym).astype(np.float64).T[0]
+        fG = np.array(Gsym).astype(np.float64).T[0]
+        '''
+
+        corkeModel = self.robot.inertia(q) @ qdd + self.robot.coriolis(q, qd) @ qd + self.robot.gravload(q, gravity = self.gravity)
+
+        '''
+        data = [["complete model",(str)(corkeModel), (str)(fDM), (str)(np.sum(fDM-corkeModel))],
+                ["Intertia matrix",(str)(self.robot.inertia(q)), (str)(fM), (str)(np.sum(fM-self.robot.inertia(q)))],
+                ["C",(str)(self.robot.coriolis(q, qd)@qd), (str)(fC), (str)(np.sum(fC-self.robot.coriolis(q, qd)@qd))],
+                ["Gravity",(str)(self.robot.gravload(q, gravity = self.gravity)), (str)(fG), (str)(np.sum(fG-self.robot.gravload(q, gravity = self.gravity)))]]
+        
+        print(tabulate(data, headers=["", "Corke", "Our", "Error"]))
+        '''
+        assert(np.sum(fDM-corkeModel) < 1e-10)
 
         return [1,1] , False
     

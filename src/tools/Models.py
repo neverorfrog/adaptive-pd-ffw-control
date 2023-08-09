@@ -38,8 +38,7 @@ class EulerLagrange():
         v = np.full((3,), sym.zero(), dtype = object) #linear velocity of link i wrt RF i
         T = 0 #total kinetic energy of the robot
         U = 0 #total potential energy of the robot
-        gv = np.array([0, -g0, 0])
-        
+        gv = np.array([0, -g0, 0]) 
 
         for i in range(n):
             offset = 10*i
@@ -68,7 +67,7 @@ class EulerLagrange():
             vc = sym.simplify(v + np.cross(w,rc))
 
             ivi = vc + np.matmul(skew(rc), w)
-            mirci = np.array(pi[offset+1:offset+4]) # TODO: maybe transpose ??? 
+            mirci = np.array(pi[offset+1:offset+4])
 
             I_link = np.diag([pi[offset+4], pi[offset+7], pi[offset+9]])
             Ti = 0.5*pi[offset+0]*np.matmul(ivi.T, ivi) + np.matmul(np.matmul(mirci, skew(ivi)), w) + 0.5*np.matmul(np.matmul(w, I_link), w)
@@ -80,16 +79,19 @@ class EulerLagrange():
             #Potential Energy
             rot0i = robot.A(i,q).R #transformation from RF 0 to RF i+1
             rc = np.array([*rc , 1])
-            Ui = -pi[offset+0]*np.matmul(gv,ri) - np.matmul(gv, np.matmul(rot0i,mirci))
-            #Ui = sym.simplify(-m[i]* np.matmul(gv,r0ci))
-            U = U + Ui
-            
+
+            r0i = robot.A(i,q).t
+
+            Ui = -pi[offset+0]*np.matmul(gv,r0i) - np.matmul(gv, np.matmul(rot0i,mirci))
+
+            U = U + Ui            
         
         #Inertia Matrix
         coeffs = coeff_dict(T, *q_d)
         self.M = np.full((n,n), sym.zero(), dtype = object)
         for row in range(n):
             self.M[row,:] = [coeffs[index2var(row,column,q_d)] for column in range(n)]
+        self.M = (np.ones((n,n))+np.diag([1]*n))*self.M
                     
         #Coriolis and centrifugal terms and gravity terms
         self.c = np.full((n,), sym.zero(), dtype = object)
@@ -99,12 +101,12 @@ class EulerLagrange():
             C_temp = M[:,i].jacobian(q)
             C = sym.simplify(0.5 * (C_temp + C_temp.T - M.diff(q[i])))
             self.c[i] = sym.simplify(np.matmul(np.matmul(q_d, C),q_d))
-            self.g[i] = U.diff(q[i])
+            self.g[i] = -U.diff(q[i])
     
 
     def getDynamicModel(self):
         q_d_d = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
-        return sym.simplify(self.M*q_d_d + self.c + self.g)
+        return sym.simplify(np.matmul(self.M,q_d_d)+ self.c + self.g)
             
 
 class OneLink(DHRobot):
