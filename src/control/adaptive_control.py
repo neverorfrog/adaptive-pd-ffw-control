@@ -105,11 +105,77 @@ class Adaptive_FFW(AdaptiveControl):
 
     def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0]):
         super().__init__(robot, env, dynamicModel, gravity)
+
+    def checkGains(self, q_d, qd_d, qdd_d):
+
+        n = len(self.robot.links)
+
+        M =  self.robot.inertia(self.robot.q)
+        '''
+        q1max = 0
+        q2max = 0
+        qq1max = 0
+        qq2max = 0
+        qqq1max = 0
+        qqq2max = 0
+        ratioMax = 0
+
+        for q1 in np.arange (0,3.14/2, 0.1):
+            for q2 in np.arange (0,3.14/2, 0.1):
+                for qq1 in np.arange (0,3.14/2, 0.1):
+                    for qq2 in np.arange (0,3.14/2, 0.1):
+                        print(q1,q2,qq1,qq2)
+                        for qqq1 in np.arange (0,3.14/2, 0.1):
+                            for qqq2 in np.arange (0,3.14/2, 0.1):
+                                z = np.array([qqq1,qqq2])
+                                if(np.linalg.norm(np.array([q1,q2]) - np.array([qq1,qq2])) == 0 or np.linalg.norm(z) == 0):
+                                    continue
+
+                                ratio = np.linalg.norm(np.matmul(self.robot.inertia([q1,q2]), z) - np.matmul(self.robot.inertia([qq1,qq2]), z))/(np.linalg.norm(np.array([q1,q2]) - np.array([qq1,qq2])) * np.linalg.norm(z))
+                                if(ratio > ratioMax):
+                                    q1max = q1
+                                    q2max = q2
+                                    qq1max = qq1
+                                    qq2max = qq2
+                                    qqq1max = qqq1
+                                    qqq2max = qqq2
+                                    ratioMax = ratio
+                        
+
+        print(q1max,q2max,qq1max,qq2max,qqq1max, qqq2max, ratioMax)
+        '''
+        kg = 144.3 + 10 # TODO: replace this
+        kM = 4.5+0.5 # TODO: replace this
+        kc1 = 50 # TODO: replace this
+        kc2 = 50 # TODO: replace this
+        k1 = np.linalg.norm(self.robot.gravload([0,0], gravity = self.gravity))
+        k2 = lambdaMax(self.robot.inertia([0,0]))
+
+        qdd_N_MW = math.sqrt(np.matmul(np.matmul(qdd_d.T, M), qdd_d))
+        qd_N_MW_sq = np.matmul(np.matmul(qd_d.T, M), qd_d)
+
+        m = math.sqrt(n) * (kg+kM*qdd_N_MW+kc2*qd_N_MW_sq)
+        delta = 1 # TODO: correct?
+        p = m+delta
+
+        epsilon = 2*k1/kg + 2*k2/kM + 2*kc1/kc2
         
-        delta = 5
-          
+        #print(p**2 * lambdaMax(M))
+        #print(2*(math.sqrt(n)*kc1*p*epsilon + p*lambdaMax(M) + kc1*math.sqrt(qd_N_MW_sq)))
+        #print(3*p + (p*(2*kc1*math.sqrt(qd_N_MW_sq) + 2*lambdaMax(self.kd) + 3)**2)/(2*lambdaMin(self.kd)))
+
+        # Condition 22 
+        assert( lambdaMin(self.kp) > p**2 * lambdaMax(M) )
+
+        # Condition 33
+        assert( lambdaMin(self.kd) > 2*(math.sqrt(n)*kc1*p*epsilon + p*lambdaMax(M) + kc1*math.sqrt(qd_N_MW_sq)) )
+
+        # Condition 34
+        assert( lambdaMin(self.kp) > 3*p + (p*(2*kc1*math.sqrt(qd_N_MW_sq) + 2*lambdaMax(self.kd) + 3)**2)/(2*lambdaMin(self.kd)) )
+    
     def feedback(self):
         '''Computes the torque necessary to follow the reference trajectory'''
+
 
         n = len(self.robot.links)
 
@@ -121,15 +187,15 @@ class Adaptive_FFW(AdaptiveControl):
         #Reference Configuration
         q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
 
+        self.checkGains(q_d, qd_d, qdd_d)
+
         #Error
         e = q_d - q
         ed = qd_d - qd
         arrived = self.check_termination(e,ed)
 
-        print(e)
-
         actualY = self.dynamicModel.evaluateY(q_d, qd_d, qd_d, qdd_d)
-        torque = self.kp @ e + self.kd @ ed + np.matmul(actualY, self.pi).astype(np.float64)
+        torque = self.kp @ e + self.kd @ ed + np.matmul(actualY, self.beliefPi).astype(np.float64)
 
         # Update rule
         gainMatrix = np.eye(n*10) # TODO: make this a parameter
@@ -141,7 +207,6 @@ class Adaptive_FFW(AdaptiveControl):
         self.append(q_d,qd_d,qdd_d,torque)
 
         return torque , arrived
-
     
 if __name__ == "__main__":
     
@@ -156,36 +221,12 @@ if __name__ == "__main__":
 
     symrobot = SymbolicPlanarRobot(n)
     model = EulerLagrange(symrobot, robot)
-    
-    # Check on bounds
-    #Property 2, 3 and 4: kg, k1, kc1, kc2, kM, k2 must be chosen big enough to satisfy the property
-    #one dumb choice could be (but this needs to be verified)
-    kg = 200
-    k1 = 200
-    kc1 = 200
-    kc2 = 200
-    kM = 200
-    k2 = 200
-    
-    gravity = model.gravity(robot.q)
-    ok = []
-    for i in range(100):
-        q1 = np.random.rand(2) * 100
-        q2 = np.random.rand(2) * 100
-        g1 = np.array(model.gravity(q1))
-        g2 = np.array(model.gravity(q2))
-
-        left = norm(g1-g2)
-        right = norm(q1-q2)
-        ok.append(norm(g1-g2) <= 200 * norm(q1-q2))
-    check = [elem for elem in ok if elem == False]
-    print(check) 
         
     # loop = Adaptive_Facile(robot, env, model, [0,-9.81,0])
-    # loop = Adaptive_FFW(robot, env, model, [0,-9.81,0])
+    loop = Adaptive_FFW(robot, env, model, [0,-9.81,0])
 
-    # loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    # loop.setK(kp = [200,100], kd = [100,60])
+    loop.setR(reference = traj, goal = goal, threshold = 0.05)
+    loop.setK(kp = [200,100], kd = [100,60])
     
-    # loop.simulate(dt = 0.01)
-    # loop.plot()
+    loop.simulate(dt = 0.01)
+    loop.plot()
