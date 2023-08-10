@@ -5,7 +5,8 @@ from roboticstoolbox.backends.PyPlot import PyPlot
 from math import pi
 from roboticstoolbox.tools.trajectory import *
 from tools.utils import *
-from trajectory_control import TrajectoryControl
+from control.trajectory_control import TrajectoryControl
+from tools.dynamics import *
 
 
 class AdaptiveControl(TrajectoryControl):
@@ -68,16 +69,40 @@ class Adaptive_Facile(AdaptiveControl):
         super().__init__(robot, env, dynamicModel, gravity)
         
     def feedback(self):
+        
+        n = len(self.robot.links)
+        
         q = self.robot.q
         qd = self.robot.qd
         
-        #Reference Configuration
+        #Reference Configuration and error
         q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
-
-        #Error
+        gainMatrix = np.linalg.inv(self.kd) @ self.kp    
+        
+        #Error     
         e = q_d - q
         ed = qd_d - qd
+        qd_r = qd_d + gainMatrix @ e
+        ed_r = qd_r - qd #modified velocity error
+        qdd_r = qdd_d + gainMatrix @ ed
         arrived = self.check_termination(e,ed)
+        
+        #Update Law
+        Y = self.dynamicModel.evaluateY(q_d, qd_d, qd_r, qdd_r)
+        gainMatrix = np.eye(n*10) # TODO: make this a parameter
+        deltaPi = (gainMatrix @ Y.T) @ ed_r
+        self.beliefPi = self.beliefPi + deltaPi
+        
+        #Torque computation
+        torque = self.kp @ e + self.kd @ ed + np.matmul(Y, self.beliefPi).astype(np.float64)
+        
+        # Trajectory logging
+        self.append(q_d,qd_d,qdd_d,torque)
+        
+        # print(f"KDKP: {self.kp @ e + self.kd @ ed}")
+        # print(f"tau: {np.matmul(Y, self.pi).astype(np.float64)}")
+        
+        return torque, arrived
         
 
 class Adaptive_FFW(AdaptiveControl):
@@ -106,15 +131,13 @@ class Adaptive_FFW(AdaptiveControl):
 
         print(e)
 
-        actualY = self.dynamicModel.evaluateY(q_d, qd_d, qdd_d)
+        actualY = self.dynamicModel.evaluateY(q_d, qd_d, qd_d, qdd_d)
         torque = self.kp @ e + self.kd @ ed + np.matmul(actualY, self.pi).astype(np.float64)
 
         # Update rule
         gainMatrix = np.eye(n*10) # TODO: make this a parameter
         sat_e = np.array([sat(el) for el in e], dtype=np.float64)
-
         deltaPi = gainMatrix @ (actualY.T @ (sat_e+ed))
-
         self.beliefPi = self.beliefPi + deltaPi
 
         # Trajectory logging
@@ -126,20 +149,22 @@ class Adaptive_FFW(AdaptiveControl):
 if __name__ == "__main__":
     
     #robot and environment creation
-    robot = ThreeLink()
+    n = 2
+    robot = TwoLink()
     env = PyPlot()
-    goal = [pi/2,pi/2,0]
+    goal = [pi/2,pi/2]
     
-    # T = 3
-    # traj = ClippedTrajectory(robot.q, goal, T)
+    T = 3
+    traj = ClippedTrajectory(robot.q, goal, T)
 
-    # symrobot = SymbolicPlanarRobot(3)
-    # model = EulerLagrange(3, robot = symrobot)
+    symrobot = SymbolicPlanarRobot(n)
+    model = EulerLagrange(n, robot = symrobot)
     
+    loop = Adaptive_Facile(robot, env, model, [0,-9.81,0])
     # loop = Adaptive_FFW(robot, env, [0,-9.81,0])
 
-    # loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    # loop.setK(kp = [200,100,100], kd = [100,60,60])
+    loop.setR(reference = traj, goal = goal, threshold = 0.05)
+    loop.setK(kp = [200,100], kd = [100,60])
     
-    # loop.simulate(dt = 0.01)
-    # loop.plot()
+    loop.simulate(dt = 0.01)
+    loop.plot()
