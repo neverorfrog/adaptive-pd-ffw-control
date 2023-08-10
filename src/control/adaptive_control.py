@@ -167,13 +167,13 @@ if __name__ == "__main__":
     kM = 200
     k2 = 200
     
-    gravity = model.evalGravity(robot.q)
+    gravity = model.gravity(robot.q)
     ok = []
     for i in range(100):
         q1 = np.random.rand(2) * 100
         q2 = np.random.rand(2) * 100
-        g1 = np.array(model.evalGravity(q1))
-        g2 = np.array(model.evalGravity(q2))
+        g1 = np.array(model.gravity(q1))
+        g2 = np.array(model.gravity(q2))
 
         left = norm(g1-g2)
         right = norm(q1-q2)

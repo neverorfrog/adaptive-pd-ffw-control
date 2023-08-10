@@ -133,7 +133,7 @@ class EulerLagrange():
         gravity = gravity.subs(g0, -9.81)
         return gravity
     
-    def getrealC(self):
+    def getrealS(self):
         #TODO
         return 
         
