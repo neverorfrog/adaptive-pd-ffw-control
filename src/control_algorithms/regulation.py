@@ -1,5 +1,5 @@
 import numpy as np
-from tools.Models import TwoLink, UncertantTwoLink
+from robots import TwoLink
 from tools.Control import Control
 from roboticstoolbox.backends.PyPlot import PyPlot
 from math import pi
@@ -73,7 +73,6 @@ class Iterative(Control):
 if __name__ == "__main__":
     
     #robot and environment creation
-    brobot = UncertantTwoLink()
     robot = TwoLink()
     env = PyPlot()
     

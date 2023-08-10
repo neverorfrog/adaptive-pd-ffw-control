@@ -1,11 +1,15 @@
 import numpy as np
-from tools.Models import *
-from tools.Control import Control
+
+from tools.robots import *
+from tools.control import Control
+from tools.dynamics import *
+from tools.utils import *
+
 from roboticstoolbox.backends.PyPlot import PyPlot
 from math import pi
 from roboticstoolbox.tools.trajectory import *
-from tools.Utils import *
-from tabulate import tabulate
+# from tabulate import tabulate
+import spatialmath.base.symbolic as sym
 
 
 class TrajectoryControl(Control):
@@ -91,7 +95,6 @@ class Feedforward_TESTING(TrajectoryControl):
         q_d_sym = sym.symbol(f"q_dot_(1:{n+1})")
         q_d_d_sym = sym.symbol(f"q_dot_dot_(1:{n+1})")
         a_sym = sym.symbol(f"a(1:{n+1})")  # link lenghts
-
         pi_sym = sym.symbol(f"pi_(1:{10*n+1})")
 
         # dynamic parameters
@@ -190,7 +193,7 @@ class Feedforward_TESTING(TrajectoryControl):
         '''
         assert(np.sum(fDM-corkeModel) < 1e-10)
 
-        return [1,1,1] , False
+        return [1,1] , False
     
 
 class FBL(TrajectoryControl):
@@ -220,114 +223,26 @@ class FBL(TrajectoryControl):
 
         return torque, arrived   
 
-class Adaptive_ffw(TrajectoryControl):
-
-    def __init__(self, robot=None, env=None, gravity=[0,0,0]):
-        super().__init__(robot, env, gravity)       
-        self.theta = np.array([5,3]) #aka a2 a3
-
-        self.a1 = robot.links[1].r[0] * robot.links[1].m 
-        self.a4 = robot.links[1].m*self.robot.links[0].a + self.robot.links[0].r[0]*self.robot.links[0].m
-                 
-    def feedback(self):
-
-        #Current configuration
-        q = self.robot.q
-        qd = self.robot.qd
-        
-        #Reference Configuration
-        q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
-
-        #Error
-        e = q_d - q
-        ed = qd_d - qd
-        arrived = self.check_termination(e,ed)
-        
-        #feedback action for known parameters
-        y = np.array([[qdd_d[0], qdd_d[1]],[0, (qdd_d[0] + qdd_d[1])]])
-        l1 = self.robot.links[0].a 
-        m0 = np.array([[2*self.a1*l1*np.cos(q_d[1]), self.a1*l1*np.cos(q_d[1])],[self.a1*l1*np.cos(q_d[1]), 0]])
-        c0 = np.array([-self.a1*l1*qd_d[1]*np.sin(q_d[1])*(2*qd_d[0]+qd_d[1]), self.a1*l1*np.sin(q_d[1])*(qd_d[0]**2)])
-        g0 = np.array([self.a1*self.gravity[1]*np.cos(q_d[0]+q_d[1])+ self.a4*self.gravity[1]*np.cos(q_d[0]), self.a1*self.gravity[1]*np.cos(q_d[0]+q_d[1])])
-        
-        # Feedback action
-        torque = self.kp @ e + self.kd @ ed + y @ self.theta + m0 @ qdd_d + c0*qd_d + g0 
-
-        # Update rule
-        gainMatrix = np.array([[5,0],[0,5]], dtype=np.float64) # TODO: make this a parameter
-        sat_e = np.array([sat(el) for el in e], dtype=np.float64)
-
-        deltaTheta = gainMatrix @ (y@(sat_e+ed))
-        self.theta = self.theta + deltaTheta
-        
-        # Trajectory logging
-        self.append(q_d,qd_d,qdd_d,torque)
-
-        return torque, arrived
-    
-
-class Adaptive_ffw_10P(TrajectoryControl):
-
-    def __init__(self, robot=None, env=None, gravity=[0,0,0]):
-        super().__init__(robot, env, gravity)
-
-        self.pi = []
-        for link in robot.links:
-            mr = link.m*link.r
-
-            row = np.array([link.m], dtype=np.float64)
-            row = np.concatenate([row, mr])
-            row = np.concatenate([row, link.I[0]])
-            row = np.concatenate([row, link.I[1][1:]])
-            row = np.concatenate([row, link.I[2][2:]])
-
-            self.pi.append(row)
-
-        self.pi = np.array(self.pi)
-
-        exit(0)
-                 
-    def feedback(self):
-
-        #Current configuration
-        q = self.robot.q
-        qd = self.robot.qd
-        
-        #Reference Configuration
-        q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
-
-        #Error
-        e = q_d - q
-        ed = qd_d - qd
-        arrived = self.check_termination(e,ed)
-        
-        torque = [1,1]
-        
-        # Trajectory logging
-        self.append(q_d,qd_d,qdd_d,torque)
-
-        return torque, arrived
-    
 if __name__ == "__main__":
     
     #robot and environment creation
-    brobot = UncertantTwoLink()
-    robot = ThreeLink()
+    robot = TwoLink()
     env = PyPlot()
-    goal = [pi/2,pi/2,0]
+    goal = [pi/2,pi/2]
     
     T = 3
     traj = ClippedTrajectory(robot.q, goal, T)
 
-    symrobot = SymbolicPlanarRobot(3)
-    model = EulerLagrange(3, robot = symrobot)
+    n = 2
+    symrobot = SymbolicPlanarRobot(n)
+    model = EulerLagrange(n, robot = symrobot)
     
     loop = Feedforward_TESTING(robot, env, model, [0,-9.81,0])
     #loop = Adaptive_ffw(robot, env, [0,-9.81,0])
     # loop = Adaptive_ffw_10P(robot, env, [0,-9.81,0])
 
     loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [200,100,100], kd = [100,60,60])
+    loop.setK(kp = [200,100], kd = [100,60])
     
     loop.simulate(dt = 0.01)
     loop.plot()

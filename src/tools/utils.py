@@ -1,6 +1,6 @@
 import numpy as np
-from roboticstoolbox.tools.trajectory import *
 from sympy import Add, poly, S
+from roboticstoolbox.tools.trajectory import *
 
 class ClippedTrajectory():
     def __init__(self, functions, T) -> None:
@@ -31,6 +31,11 @@ class ClippedTrajectory():
 def sat(x, m=1):
     return min(max(-1, m*x), 1)
 
+def skew(vector):
+    return np.array([[0, -vector[2], vector[1]], 
+                     [vector[2], 0, -vector[0]], 
+                     [-vector[1], vector[0], 0]])
+    
 def index2var(row, column, vars):
     return vars[row]*vars[column]
 
@@ -42,8 +47,3 @@ def coeff_dict(expr, *vars):
         assert 1 not in rv
         rv.update({S.One: i})
     return rv
-
-def skew(vector):
-    return np.array([[0, -vector[2], vector[1]], 
-                     [vector[2], 0, -vector[0]], 
-                     [-vector[1], vector[0], 0]])

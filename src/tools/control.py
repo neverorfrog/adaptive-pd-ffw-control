@@ -2,7 +2,7 @@ from typing import Tuple
 from roboticstoolbox import *
 import numpy as np
 from roboticstoolbox.backends.PyPlot import PyPlot
-from tools.Models import *
+from tools.robots import *
 from math import pi
 import matplotlib.pyplot as plt
 
