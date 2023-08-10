@@ -2,10 +2,11 @@ import numpy as np
 import spatialmath.base.symbolic as sym
 import sympy
 from tools.utils import skew, index2var, coeff_dict
+from tools.robots import *
 
 class EulerLagrange():
 
-    def __init__(self, robot, realrobot = None):
+    def __init__(self, robot):
 
         self.robot = robot
         self.n = len(robot.links); n = self.n
@@ -41,13 +42,6 @@ class EulerLagrange():
 
         symModel = sympy.Matrix(self.getDynamicModel())
         self.Y = symModel.jacobian(self.pi)
-        
-        #Evaluation on realrobot
-        if realrobot is not None:
-            self.realrobot = realrobot
-            self.realgravity = self.getrealG()
-            self.realinertia = self.getrealM()
-            self.realcoriolis = self.getrealS()
             
             
     def movingFrames(self, robot):
@@ -115,32 +109,98 @@ class EulerLagrange():
     def getY(self, simplify = False):
         return sym.simplify(self.Y) if simplify else self.Y
     
-    def getrealG(self):
-        assert(self.realrobot is not None)
-        robot = self.realrobot
-        n = len(robot.links)
+    def getrealG(self, robot, pi):
+        n = self.n
         gravity = sympy.Matrix(self.g)
         a = sym.symbol(f"a(1:{n+1})") 
         g0 = sym.symbol("g")
+        sympi = sym.symbol(f"pi_(1:{10*n+1})")
+
         for i in range(n):
             shift = 10*i
-            mr = robot.links[i].m * robot.links[i].r
-            gravity = gravity.subs(self.pi[shift+0], robot.links[i].m )
-            gravity = gravity.subs(self.pi[shift+1], mr[0])
-            gravity = gravity.subs(self.pi[shift+2], mr[1])
-            gravity = gravity.subs(self.pi[shift+3], mr[2])
+            gravity = gravity.subs(sympi[shift+0], pi[shift+0])
+            gravity = gravity.subs(sympi[shift+1], pi[shift+1])
+            gravity = gravity.subs(sympi[shift+2], pi[shift+2])
+            gravity = gravity.subs(sympi[shift+3], pi[shift+3])
             gravity = gravity.subs(a[i], robot.links[i].a)
         gravity = gravity.subs(g0, -9.81)
         return gravity
     
-    def getrealS(self):
-        #TODO
-        return 
+    def getrealS(self, robot, pi):
+        n = self.n
+        inertia = sympy.Matrix(self.M)
+        a = sym.symbol(f"a(1:{n+1})") 
+        g0 = sym.symbol("g")
+        sympi = sym.symbol(f"pi_(1:{10*n+1})")
+
+        for i in range(n):
+            shift = 10*i
+            inertia = inertia.subs(sympi[shift+0], pi[shift+0])
+            inertia = inertia.subs(sympi[shift+1], pi[shift+1])
+            inertia = inertia.subs(sympi[shift+2], pi[shift+2])
+            inertia = inertia.subs(sympi[shift+3], pi[shift+3])
+            inertia = inertia.subs(sympi[shift+4], pi[shift+4])
+            inertia = inertia.subs(sympi[shift+7], pi[shift+7])
+            inertia = inertia.subs(sympi[shift+9], pi[shift+9])
+            inertia = inertia.subs(a[i], robot.links[i].a)
+        inertia = inertia.subs(g0, -9.81)
+        return inertia
         
-    def getrealM(self):
-        #TODO
-        return
+    def getrealM(self, robot, pi):
+        n = self.n
+        inertia = sympy.Matrix(self.M)
+        a = sym.symbol(f"a(1:{n+1})") 
+        g0 = sym.symbol("g")
+        sympi = sym.symbol(f"pi_(1:{10*n+1})")
+
+        for i in range(n):
+            shift = 10*i
+            inertia = inertia.subs(sympi[shift+0], pi[shift+0])
+            inertia = inertia.subs(sympi[shift+1], pi[shift+1])
+            inertia = inertia.subs(sympi[shift+2], pi[shift+2])
+            inertia = inertia.subs(sympi[shift+3], pi[shift+3])
+            inertia = inertia.subs(sympi[shift+4], pi[shift+4])
+            inertia = inertia.subs(sympi[shift+7], pi[shift+7])
+            inertia = inertia.subs(sympi[shift+9], pi[shift+9])
+            inertia = inertia.subs(a[i], robot.links[i].a)
+        inertia = inertia.subs(g0, -9.81)
+        return inertia
     
+    def get_christoffel(self,k,robot,pi):
+        n = self.n
+        M = sympy.Matrix(self.getrealM(robot, pi))
+        q = sym.symbol(f"q(1:{n+1})") 
+        # TODO: NON FUNGEEEEEEEEE
+        c = sympy.Matrix((n,n))
+        for i in range(M.shape[0]):
+            for j in range(M.shape[1]):
+                first = M[k,j].diff(q[i])
+                second = M[k,i].diff(q[j])
+                third = M[i,j].diff(q[k])
+
+                if isinstance(first, float):
+                    first = sym.symbol(first)
+                if isinstance(second, float):
+                    second = sym.symbol(second)
+                if isinstance(third, float):
+                    third = sym.symbol(third) 
+
+                if (first == 0):
+                    first = sym.zero()
+                if (second == 0):
+                    second = sym.zero()
+                if (third == 0):
+                    third = sym.zero()
+
+                print(type(first))
+                print(type(second))
+                print(type(third))
+                
+                tmp = np.add(first,second)
+                c[i,j] = np.subtract(tmp,third)
+                print(c[i,j])
+        return 0.5 * c
+
     def gravity(self, q):
         assert(self.realrobot is not None)
         n = len(self.realrobot.links)
@@ -156,8 +216,23 @@ class EulerLagrange():
     
     def inertia(self, q):
         #TODO
-        return           
+        return        
+
+    def evaluateMatrix(self, mat, q, qd, qd_S, qdd):
+        actualMatrix = mat
+        q_sym = sym.symbol(f"q(1:{self.n+1})")  # link variables
+        qd_sym = sym.symbol(f"q_dot_(1:{self.n+1})")
+        qdd_sym = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
+        qd_S_sym = sym.symbol(f"q_dot_S_(1:{self.n+1})")
+
+        for i in range(self.n):
+            actualMatrix = actualMatrix.subs(q_sym[i], q[i])
+            actualMatrix = actualMatrix.subs(qd_sym[i], qd[i])
+            actualMatrix = actualMatrix.subs(qd_S_sym[i], qd_S[i])
+            actualMatrix = actualMatrix.subs(qdd_sym[i], qdd[i])
         
+        return actualMatrix
+    
     def evaluateY(self, q, qd, qd_S, qdd):
         actualY = self.Y
         q_sym = sym.symbol(f"q(1:{self.n+1})")  # link variables
@@ -172,5 +247,10 @@ class EulerLagrange():
             actualY = actualY.subs(qdd_sym[i], qdd[i])
         
         return actualY
+    
+
+if __name__ == "__main__":
+    symrobot = SymbolicPlanarRobot(2)
+    model = EulerLagrange(symrobot)
             
     
