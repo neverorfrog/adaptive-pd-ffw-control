@@ -47,3 +47,7 @@ def coeff_dict(expr, *vars):
         assert 1 not in rv
         rv.update({S.One: i})
     return rv
+
+def norm(v):
+    sqnorm = float((v.T).dot(v))
+    return np.sqrt(sqnorm)

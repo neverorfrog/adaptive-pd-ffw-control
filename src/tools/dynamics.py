@@ -5,24 +5,57 @@ from tools.utils import skew, index2var, coeff_dict
 
 class EulerLagrange():
 
-    def __init__(self, n, robot):
+    def __init__(self, robot, realrobot = None):
 
         self.robot = robot
-        self.n = n
+        self.n = len(robot.links); n = self.n
         self.Y = None
         self.dynamicModel = None
         
         #kinematic parameters
         q = sym.symbol(f"q(1:{n+1})")  # link variables
         q_d = sym.symbol(f"q_dot_(1:{n+1})")
-        a = sym.symbol(f"a(1:{n+1})")  # link lenghts
         
         #dynamic parameters
         self.pi = sym.symbol(f"pi_(1:{10*n+1})")
+
+        #Kinetic and Potential energy
+        T,U = self.movingFrames(robot)
+        
+        #Inertia Matrix
+        coeffs = coeff_dict(T, *q_d)
+        self.M = np.full((n,n), sym.zero(), dtype = object)
+        for row in range(n):
+            self.M[row,:] = [coeffs[index2var(row,column,q_d)] for column in range(n)]
+        self.M = (np.ones((n,n))+np.diag([1]*n))*self.M
+                    
+        #Coriolis and centrifugal terms and gravity terms
+        self.S = np.full((n,), sym.zero(), dtype = object)
+        self.g = np.full((n,), sym.zero(), dtype = object)
+        M = sympy.Matrix(self.M)
+        for i in range(n):
+            C_temp = M[:,i].jacobian(q)
+            C = 0.5 * (C_temp + C_temp.T - M.diff(q[i]))
+            self.S[i] = np.matmul(q_d, C)
+            self.g[i] = -U.diff(q[i])
+
+        symModel = sympy.Matrix(self.getDynamicModel())
+        self.Y = symModel.jacobian(self.pi)
+        
+        #Evaluation on realrobot
+        if realrobot is not None:
+            self.realrobot = realrobot
+            self.realgravity = self.getrealG()
+            self.realinertia = self.getrealM()
+            self.realcoriolis = self.getrealS()
+            
+            
+    def movingFrames(self, robot):
+        n = self.n
         g0 = sym.symbol("g")
         dc = sym.symbol(f"dc(1:{n+1})")
-        
-        
+        a = sym.symbol(f"a(1:{n+1})")  # link lenghts
+        gv = np.array([0, -g0, 0]) 
         ri = np.full((3,), sym.zero(), dtype = object) #vector from RF i-1 to i wrt RF i-1
         rc = np.full((3,), sym.zero(), dtype = object) #position vector of COM i seen from RF i
         rim1c = np.full((3,), sym.zero(), dtype = object) #vector from RF i-1 to COM as seen from RF i
@@ -30,13 +63,15 @@ class EulerLagrange():
         Rinv = np.full((3,3), sym.zero(), dtype = object) #ith matrix representing rotation from Rf i to Rf i-1
         iwi = np.full((3,), sym.zero(), dtype = object) #angular velocity of link i wrt RF i
         ivi = np.full((3,), sym.zero(), dtype = object) #linear velocity of link i wrt RF i
+        
         T = 0 #total kinetic energy of the robot
         U = 0 #total potential energy of the robot
-        gv = np.array([0, -g0, 0]) 
-
-        for i in range(n):
+        
+        q = sym.symbol(f"q(1:{n+1})")  # link variables
+        q_d = sym.symbol(f"q_dot_(1:{n+1})")
+        
+        for i in range(n):            
             offset = 10*i
-            #Preprocessing
             sigma = int(robot.links[i].isprismatic) #check for prismatic joints
             A = robot[i].A(q[i]) #homogeneus transformation from frame i to i+1
             ri = A.t
@@ -66,29 +101,11 @@ class EulerLagrange():
             rc = np.array([*rc , 1])
             r0i = robot.A(i,q).t
             Ui = -self.pi[offset+0]*np.matmul(gv,r0i) - np.matmul(gv, np.matmul(rot0i,mirci))
-            U = U + Ui            
+            U = U + Ui
         
-        #Inertia Matrix
-        coeffs = coeff_dict(T, *q_d)
-        self.M = np.full((n,n), sym.zero(), dtype = object)
-        for row in range(n):
-            self.M[row,:] = [coeffs[index2var(row,column,q_d)] for column in range(n)]
-        self.M = (np.ones((n,n))+np.diag([1]*n))*self.M
-                    
-        #Coriolis and centrifugal terms and gravity terms
-        self.S = np.full((n,), sym.zero(), dtype = object)
-        self.g = np.full((n,), sym.zero(), dtype = object)
-        M = sympy.Matrix(self.M)
-        for i in range(n):
-            C_temp = M[:,i].jacobian(q)
-            C = 0.5 * (C_temp + C_temp.T - M.diff(q[i]))
-            self.S[i] = np.matmul(q_d, C)
-            self.g[i] = -U.diff(q[i])
-
-        symModel = sympy.Matrix(self.getDynamicModel())
-        self.Y = symModel.jacobian(self.pi)
+        return T,U
+        
     
-
     def getDynamicModel(self):
         qdd = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
         qd_S = sym.symbol(f"q_dot_S_(1:{self.n+1})")
@@ -98,6 +115,49 @@ class EulerLagrange():
     def getY(self, simplify = False):
         return sym.simplify(self.Y) if simplify else self.Y
     
+    def getrealG(self):
+        assert(self.realrobot is not None)
+        robot = self.realrobot
+        n = len(robot.links)
+        gravity = sympy.Matrix(self.g)
+        a = sym.symbol(f"a(1:{n+1})") 
+        g0 = sym.symbol("g")
+        for i in range(n):
+            shift = 10*i
+            mr = robot.links[i].m * robot.links[i].r
+            gravity = gravity.subs(self.pi[shift+0], robot.links[i].m )
+            gravity = gravity.subs(self.pi[shift+1], mr[0])
+            gravity = gravity.subs(self.pi[shift+2], mr[1])
+            gravity = gravity.subs(self.pi[shift+3], mr[2])
+            gravity = gravity.subs(a[i], robot.links[i].a)
+        gravity = gravity.subs(g0, -9.81)
+        return gravity
+    
+    def getrealC(self):
+        #TODO
+        return 
+        
+    def getrealM(self):
+        #TODO
+        return
+    
+    def gravity(self, q):
+        assert(self.realrobot is not None)
+        n = len(self.realrobot.links)
+        q_sym = sym.symbol(f"q(1:{n+1})")  # link variable
+        gravity = self.realgravity
+        for i in range(n):
+            gravity = gravity.subs(q_sym[i], q[i])
+        return gravity.evalf() 
+    
+    def coriolis(self, q):
+        #TODO
+        return
+    
+    def inertia(self, q):
+        #TODO
+        return           
+        
     def evaluateY(self, q, qd, qd_S, qdd):
         actualY = self.Y
         q_sym = sym.symbol(f"q(1:{self.n+1})")  # link variables

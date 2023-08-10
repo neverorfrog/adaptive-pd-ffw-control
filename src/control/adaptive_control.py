@@ -71,7 +71,6 @@ class Adaptive_Facile(AdaptiveControl):
     def feedback(self):
         
         n = len(self.robot.links)
-        
         q = self.robot.q
         qd = self.robot.qd
         
@@ -98,10 +97,7 @@ class Adaptive_Facile(AdaptiveControl):
         
         # Trajectory logging
         self.append(q_d,qd_d,qdd_d,torque)
-        
-        # print(f"KDKP: {self.kp @ e + self.kd @ ed}")
-        # print(f"tau: {np.matmul(Y, self.pi).astype(np.float64)}")
-        
+                
         return torque, arrived
         
 
@@ -110,7 +106,8 @@ class Adaptive_FFW(AdaptiveControl):
     def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0]):
         super().__init__(robot, env, dynamicModel, gravity)
         
-         
+        delta = 5
+          
     def feedback(self):
         '''Computes the torque necessary to follow the reference trajectory'''
 
@@ -158,13 +155,37 @@ if __name__ == "__main__":
     traj = ClippedTrajectory(robot.q, goal, T)
 
     symrobot = SymbolicPlanarRobot(n)
-    model = EulerLagrange(n, robot = symrobot)
+    model = EulerLagrange(symrobot, robot)
     
-    loop = Adaptive_Facile(robot, env, model, [0,-9.81,0])
-    # loop = Adaptive_FFW(robot, env, [0,-9.81,0])
+    # Check on bounds
+    #Property 2, 3 and 4: kg, k1, kc1, kc2, kM, k2 must be chosen big enough to satisfy the property
+    #one dumb choice could be (but this needs to be verified)
+    kg = 200
+    k1 = 200
+    kc1 = 200
+    kc2 = 200
+    kM = 200
+    k2 = 200
+    
+    gravity = model.evalGravity(robot.q)
+    ok = []
+    for i in range(100):
+        q1 = np.random.rand(2) * 100
+        q2 = np.random.rand(2) * 100
+        g1 = np.array(model.evalGravity(q1))
+        g2 = np.array(model.evalGravity(q2))
 
-    loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [200,100], kd = [100,60])
+        left = norm(g1-g2)
+        right = norm(q1-q2)
+        ok.append(norm(g1-g2) <= 200 * norm(q1-q2))
+    check = [elem for elem in ok if elem == False]
+    print(check) 
+        
+    # loop = Adaptive_Facile(robot, env, model, [0,-9.81,0])
+    # loop = Adaptive_FFW(robot, env, model, [0,-9.81,0])
+
+    # loop.setR(reference = traj, goal = goal, threshold = 0.05)
+    # loop.setK(kp = [200,100], kd = [100,60])
     
-    loop.simulate(dt = 0.01)
-    loop.plot()
+    # loop.simulate(dt = 0.01)
+    # loop.plot()
