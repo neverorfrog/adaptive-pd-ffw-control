@@ -123,6 +123,8 @@ class Adaptive_FFW(AdaptiveControl):
 
         tmp_cand = np.repeat([candidates],n,axis=0)
         km = 0
+        kc1 = 0
+        kc2 = 0
 
         for i in range(n):
             diffM = M.diff(q[i])

@@ -170,35 +170,15 @@ class EulerLagrange():
         n = self.n
         M = sympy.Matrix(self.getrealM(robot, pi))
         q = sym.symbol(f"q(1:{n+1})") 
-        # TODO: NON FUNGEEEEEEEEE
-        c = sympy.Matrix((n,n))
+        c = sympy.Matrix(np.ndarray((n,n)))
+
         for i in range(M.shape[0]):
             for j in range(M.shape[1]):
                 first = M[k,j].diff(q[i])
                 second = M[k,i].diff(q[j])
                 third = M[i,j].diff(q[k])
 
-                if isinstance(first, float):
-                    first = sym.symbol(first)
-                if isinstance(second, float):
-                    second = sym.symbol(second)
-                if isinstance(third, float):
-                    third = sym.symbol(third) 
-
-                if (first == 0):
-                    first = sym.zero()
-                if (second == 0):
-                    second = sym.zero()
-                if (third == 0):
-                    third = sym.zero()
-
-                print(type(first))
-                print(type(second))
-                print(type(third))
-                
-                tmp = np.add(first,second)
-                c[i,j] = np.subtract(tmp,third)
-                print(c[i,j])
+                c[i,j] = first+second-third
         return 0.5 * c
 
     def gravity(self, q):
