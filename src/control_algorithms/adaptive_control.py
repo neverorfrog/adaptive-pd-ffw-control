@@ -7,23 +7,9 @@ from roboticstoolbox.tools.trajectory import *
 from tools.utils import *
 from trajectory_control import TrajectoryControl
 
-class Adaptive_Facile(TrajectoryControl):
-    def feedback(self):
-        q = self.robot.q
-        qd = self.robot.qd
-        
-        #Reference Configuration
-        q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
 
-        #Error
-        e = q_d - q
-        ed = qd_d - qd
-        arrived = self.check_termination(e,ed)
-        
-
-class Adaptive_FFW(TrajectoryControl):
-
-    def __init__(self, robot=None, env=None, dynamicModel=None, gravity=[0,0,0]):
+class AdaptiveControl(TrajectoryControl):
+    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0]):
         super().__init__(robot, env, gravity)
         self.dynamicModel = dynamicModel
 
@@ -44,6 +30,7 @@ class Adaptive_FFW(TrajectoryControl):
             I_link = self.robot.links[i].I + self.robot.links[i].m*np.matmul(skew(self.robot.links[i].r).T, skew(self.robot.links[i].r))
             mr = self.robot.links[i].m*self.robot.links[i].r #+ np.random.normal(0,1,3)
 
+            #Computation of actual dynamic parameters
             self.pi[shift+0] = self.robot.links[i].m 
             self.beliefPi[shift+0] = self.pi[shift+0] + np.random.normal(0,10,1)
 
@@ -74,12 +61,35 @@ class Adaptive_FFW(TrajectoryControl):
             self.pi[shift+9] = I_link[2,2]
             self.beliefPi[shift+9] = self.pi[shift+9] + np.random.normal(0,10,1)
         
+
+class Adaptive_Facile(AdaptiveControl):
+    
+    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0]):
+        super().__init__(robot, env, dynamicModel, gravity)
+        
+    def feedback(self):
+        q = self.robot.q
+        qd = self.robot.qd
+        
+        #Reference Configuration
+        q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
+
+        #Error
+        e = q_d - q
+        ed = qd_d - qd
+        arrived = self.check_termination(e,ed)
+        
+
+class Adaptive_FFW(AdaptiveControl):
+
+    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0]):
+        super().__init__(robot, env, dynamicModel, gravity)
+        
          
     def feedback(self):
-        '''Computes the torque necessary to reach the reference position'''
+        '''Computes the torque necessary to follow the reference trajectory'''
 
         n = len(self.robot.links)
-
 
         #Current configuration
         q = self.robot.q
@@ -97,14 +107,13 @@ class Adaptive_FFW(TrajectoryControl):
         print(e)
 
         actualY = self.dynamicModel.evaluateY(q_d, qd_d, qdd_d)
-    
         torque = self.kp @ e + self.kd @ ed + np.matmul(actualY, self.pi).astype(np.float64)
 
         # Update rule
         gainMatrix = np.eye(n*10) # TODO: make this a parameter
         sat_e = np.array([sat(el) for el in e], dtype=np.float64)
 
-        deltaPi = gainMatrix @ (actualY.T@(sat_e+ed))
+        deltaPi = gainMatrix @ (actualY.T @ (sat_e+ed))
 
         self.beliefPi = self.beliefPi + deltaPi
 

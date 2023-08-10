@@ -76,13 +76,13 @@ class EulerLagrange():
         self.M = (np.ones((n,n))+np.diag([1]*n))*self.M
                     
         #Coriolis and centrifugal terms and gravity terms
-        self.c = np.full((n,), sym.zero(), dtype = object)
+        self.S = np.full((n,), sym.zero(), dtype = object)
         self.g = np.full((n,), sym.zero(), dtype = object)
         M = sympy.Matrix(self.M)
         for i in range(n):
             C_temp = M[:,i].jacobian(q)
             C = 0.5 * (C_temp + C_temp.T - M.diff(q[i]))
-            self.c[i] = np.matmul(np.matmul(q_d, C),q_d)
+            self.S[i] = np.matmul(q_d, C)
             self.g[i] = -U.diff(q[i])
 
         symModel = sympy.Matrix(self.getDynamicModel())
@@ -90,23 +90,26 @@ class EulerLagrange():
     
 
     def getDynamicModel(self):
-        q_d_d = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
-        return np.matmul(self.M,q_d_d)+ self.c + self.g
+        qdd = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
+        qd_S = sym.symbol(f"q_dot_S_(1:{self.n+1})")
+        return np.matmul(self.M,qdd) + np.matmul(self.S,qd_S) + self.g
     
     # Return the linear parametrization Y matrix such that Y*pi = tau
     def getY(self, simplify = False):
         return sym.simplify(self.Y) if simplify else self.Y
     
-    def evaluateY(self, q, qd, qdd):
+    def evaluateY(self, q, qd, qd_S, qdd):
         actualY = self.Y
         q_sym = sym.symbol(f"q(1:{self.n+1})")  # link variables
-        q_d_sym = sym.symbol(f"q_dot_(1:{self.n+1})")
-        q_d_d_sym = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
+        qd_sym = sym.symbol(f"q_dot_(1:{self.n+1})")
+        qdd_sym = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
+        qd_S_sym = sym.symbol(f"q_dot_S_(1:{self.n+1})")
 
         for i in range(self.n):
             actualY = actualY.subs(q_sym[i], q[i])
-            actualY = actualY.subs(q_d_sym[i], qd[i])
-            actualY = actualY.subs(q_d_d_sym[i], qdd[i])
+            actualY = actualY.subs(qd_sym[i], qd[i])
+            actualY = actualY.subs(qd_S_sym[i], qd_S[i])
+            actualY = actualY.subs(qdd_sym[i], qdd[i])
         
         return actualY
             
