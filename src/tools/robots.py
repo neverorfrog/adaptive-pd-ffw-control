@@ -43,8 +43,8 @@ class TwoLink(DHRobot):
 
         from math import pi
         zero = 0.0
-        a1 = 0.45
-        a2 = 0.3
+        a1 = 0.5
+        a2 = 0.5
         deg = pi / 180
             
         # links
@@ -52,9 +52,9 @@ class TwoLink(DHRobot):
             alpha = 0, #link twist
             a = a1, #link length
             d = 0, #offset along the z axis
-            m = 23.902, #mass of the link
-            r = [-0.35,0,0], #position of COM with respect to link frame
-            I=[0, 0, 1.26, 0, 0, 0], #inertia tensor,
+            m = 10, #mass of the link
+            r = [0.25,0,0], #position of COM with respect to link frame
+            I=[0, 0, 5/24, 0, 0, 0], #inertia tensor,
             B = 0, #viscous friction
             qlim=[-135 * deg, 135 * deg]
         )
@@ -62,9 +62,9 @@ class TwoLink(DHRobot):
             alpha = 0,
             a = a2,
             d = 0,
-            m = 3.88,
-            r = [-0.25,0,0],
-            I=[0, 0, 0.093, 0, 0, 0],
+            m = 5,
+            r = [0.25,0,0],
+            I=[0, 0, 5/48, 0, 0, 0],
             B = 0,
             qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
         )

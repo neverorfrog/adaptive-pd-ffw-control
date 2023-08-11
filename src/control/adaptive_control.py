@@ -159,29 +159,39 @@ class Adaptive_FFW(AdaptiveControl):
         kc1 *= n**2
         kc2 *= n**3
         kg *= n
-               
-        M = self.dynamicModel.inertia(self.robot.q) 
+                               
+        M = np.array(self.dynamicModel.inertia(q_d), dtype=float) 
+        print(f"M: {M}")
+        print(f"qdd_d: {qdd_d}")
         qdd_N_MW = math.sqrt(np.matmul(np.matmul(qdd_d.T, M), qdd_d))
         qd_N_MW_sq = np.matmul(np.matmul(qd_d.T, M), qd_d)
-
         m = math.sqrt(n) * (kg + km*qdd_N_MW + kc2*qd_N_MW_sq)
         delta = 1 # TODO: correct?
         p = m + delta
 
         epsilon = 2*k1/kg + 2*k2/km + 2*kc1/kc2
         
-        print(p**2)
-        #print(2*(math.sqrt(n)*kc1*p*epsilon + p*lambdaMax(M) + kc1*math.sqrt(qd_N_MW_sq)))
-        #print(3*p + (p*(2*kc1*math.sqrt(qd_N_MW_sq) + 2*lambdaMax(self.kd) + 3)**2)/(2*lambdaMin(self.kd)))
+        
+        condition22 = p**2 * lambdaMax(M)
+        condition33 = 2*(math.sqrt(n)*kc1*p*epsilon + p*lambdaMax(M) + kc1*math.sqrt(qd_N_MW_sq))
+        condition34 = 3*p + (p*(2*kc1*math.sqrt(qd_N_MW_sq) + 2*lambdaMax(self.kd) + 3)**2)/(2*lambdaMin(self.kd))
+        
+        print(f"condition22: {condition22}")
+        print(f"condition33: {condition33}")
+        print(f"condition34: {condition34}")
 
         # Condition 22 
-        assert( lambdaMin(self.kp) > p**2 * lambdaMax(M) )
+        assert(lambdaMin(self.kp) > condition22)
+        print("Condition 22 passed")
 
         # Condition 33
-        assert( lambdaMin(self.kd) > 2*(math.sqrt(n)*kc1*p*epsilon + p*lambdaMax(M) + kc1*math.sqrt(qd_N_MW_sq)) )
+        assert(lambdaMin(self.kd) >  condition33)
+        print("Condition 33 passed")
 
         # Condition 34
-        assert( lambdaMin(self.kp) > 3*p + (p*(2*kc1*math.sqrt(qd_N_MW_sq) + 2*lambdaMax(self.kd) + 3)**2)/(2*lambdaMin(self.kd)) )
+        assert(lambdaMin(self.kp) > condition34)
+        print("Condition 34 passed")
+        
         
         
     def feedback(self):
@@ -210,7 +220,7 @@ class Adaptive_FFW(AdaptiveControl):
         gainMatrix = np.eye(n*10) # TODO: make this a parameter
         sat_e = np.array([sat(el) for el in e], dtype=np.float64)
         deltaPi = gainMatrix @ (actualY.T @ (sat_e+ed))
-        self.beliefPi = self.beliefPi + deltaPi
+        #self.beliefPi = self.beliefPi + deltaPi
 
         # Trajectory logging
         self.append(q_d,qd_d,qdd_d,torque)
@@ -235,7 +245,7 @@ if __name__ == "__main__":
     loop = Adaptive_FFW(robot, env, model, [0,-9.81,0])
     
     loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [2e3,1e3], kd = [150,50])
+    loop.setK(kp = [3e8,2e8], kd = [3e5,7e4])
     
     loop.simulate(dt = 0.01)
     loop.plot()
