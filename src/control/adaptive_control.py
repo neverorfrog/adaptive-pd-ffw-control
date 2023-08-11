@@ -113,18 +113,17 @@ class Adaptive_FFW(AdaptiveControl):
         M = self.dynamicModel.getrealM(self.robot, self.beliefPi)
         M = sympy.Matrix(M)
         g = self.dynamicModel.getrealG(self.robot, self.beliefPi)
-        g = sympy.Matrix(g)
+        g = sympy.Matrix(g)        
 
         q = sym.symbol(f"q(1:{n+1})")  # link variables
-        q_d = sym.symbol(f"q_dot_(1:{n+1})")
-        
         candidates = [0, pi/2, pi, 3/2*pi]
-
         tmp_cand = np.repeat([candidates],n,axis=0)
         km = 0
         kc1 = 0
         kc2 = 0
         kg = 0
+        k1 = 0
+        k2 = 0
 
         for i in range(n):
             diffM = M.diff(q[i])
@@ -134,52 +133,36 @@ class Adaptive_FFW(AdaptiveControl):
             for configuration in itertools.product(*tmp_cand):
                 configuration = list(configuration)
                 #Evaluate differentiated matrices for every possible tuple of candidates
-                evM = self.dynamicModel.evaluateMatrix(diffM, configuration, [0]*n, [0]*n, [0]*n)
+                evM = self.dynamicModel.evaluateMatrix(M, configuration, [0]*n, [0]*n, [0]*n)
+                evdiffM = self.dynamicModel.evaluateMatrix(diffM, configuration, [0]*n, [0]*n, [0]*n)
                 evC = self.dynamicModel.evaluateMatrix(c_i, configuration, [0]*n, [0]*n, [0]*n)
                 evdiffC = self.dynamicModel.evaluateMatrix(diffc_i, configuration, [0]*n, [0]*n, [0]*n)
+                evG = self.dynamicModel.evaluateMatrix(g, configuration, [0]*n, [0]*n, [0]*n)
                 evdiffG = self.dynamicModel.evaluateMatrix(diffG, configuration, [0]*n, [0]*n, [0]*n)
-                evM = np.abs(evM)
+                evdiffM = np.abs(evdiffM)
                 evC = np.abs(evC)
                 evdiffC = np.abs(evdiffC)
                 evdiffG = np.abs(evdiffG)
+                evG = norm(evG)
                 #Max of evaluated matrices
-                km = max(km, np.max(evM))
+                km = max(km, np.max(evdiffM))
                 kc1 = max(kc1, np.max(evC))
                 kc2 = max(kc2, np.max(evdiffC))
                 kg = max(kg, np.max(evdiffG))
+                k1 = max(k1, np.max(evG))
+                k2 = max(k2, lambdaMax(np.array(evM,dtype=float)))
                 
         
         km *= n**2
         kc1 *= n**2
         kc2 *= n**3
         kg *= n
-        
-        print(km)
-        print(kc1)
-        print(kc2)
-        print(kg)
-        
-
-        #evaluateMatrix(M, self.robot.q, self.robot.qd, self.robot.qdd)
-
-        #kM = n**2 * 
- 
-        # exit(0)
-
+                
         '''
-        kg = 144.3 + 10 # TODO: replace this
-        kM = 4.5+0.5 # TODO: replace this
-        kc1 = 50 # TODO: replace this
-        kc2 = 50 # TODO: replace this
-
-
-        k1 = np.linalg.norm(self.robot.gravload([0,0], gravity = self.gravity))
-        k2 = lambdaMax(self.robot.inertia([0,0]))
-
         qdd_N_MW = math.sqrt(np.matmul(np.matmul(qdd_d.T, M), qdd_d))
         qd_N_MW_sq = np.matmul(np.matmul(qd_d.T, M), qd_d)
 
-        m = math.sqrt(n) * (kg+kM*qdd_N_MW+kc2*qd_N_MW_sq)
+        m = math.sqrt(n) * (kg + km*qdd_N_MW + kc2*qd_N_MW_sq)
         delta = 1 # TODO: correct?
         p = m+delta
 
@@ -199,6 +182,7 @@ class Adaptive_FFW(AdaptiveControl):
         # Condition 34
         #assert( lambdaMin(self.kp) > 3*p + (p*(2*kc1*math.sqrt(qd_N_MW_sq) + 2*lambdaMax(self.kd) + 3)**2)/(2*lambdaMin(self.kd)) )
         '''
+        
     def feedback(self):
         '''Computes the torque necessary to follow the reference trajectory'''
 
@@ -207,7 +191,6 @@ class Adaptive_FFW(AdaptiveControl):
         #Current configuration
         q = self.robot.q
         qd = self.robot.qd
-        qdd = self.robot.qdd
 
         #Reference Configuration
         q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])

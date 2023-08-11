@@ -51,6 +51,7 @@ def coeff_dict(expr, *vars):
 def norm(v):
     sqnorm = float((v.T).dot(v))
     return np.sqrt(sqnorm)
+
 def lambdaMin(matrix):
     eigenVal, _ = np.linalg.eig(matrix)
     return min(eigenVal)
