@@ -112,7 +112,6 @@ class Adaptive_FFW(AdaptiveControl):
 
         M = self.dynamicModel.getrealM(self.robot, self.beliefPi)
         M = sympy.Matrix(M)
-
         g = self.dynamicModel.getrealG(self.robot, self.beliefPi)
         g = sympy.Matrix(g)
 
@@ -125,23 +124,40 @@ class Adaptive_FFW(AdaptiveControl):
         km = 0
         kc1 = 0
         kc2 = 0
+        kg = 0
 
         for i in range(n):
             diffM = M.diff(q[i])
             c_i = self.dynamicModel.get_christoffel(i, self.robot, self.beliefPi)
+            diffG = g.diff(q[i])
+            diffc_i = c_i.diff(q[i])
             for configuration in itertools.product(*tmp_cand):
                 configuration = list(configuration)
+                #Evaluate differentiated matrices for every possible tuple of candidates
                 evM = self.dynamicModel.evaluateMatrix(diffM, configuration, [0]*n, [0]*n, [0]*n)
                 evC = self.dynamicModel.evaluateMatrix(c_i, configuration, [0]*n, [0]*n, [0]*n)
+                evdiffC = self.dynamicModel.evaluateMatrix(diffc_i, configuration, [0]*n, [0]*n, [0]*n)
+                evdiffG = self.dynamicModel.evaluateMatrix(diffG, configuration, [0]*n, [0]*n, [0]*n)
                 evM = np.abs(evM)
                 evC = np.abs(evC)
+                evdiffC = np.abs(evdiffC)
+                evdiffG = np.abs(evdiffG)
+                #Max of evaluated matrices
                 km = max(km, np.max(evM))
                 kc1 = max(kc1, np.max(evC))
+                kc2 = max(kc2, np.max(evdiffC))
+                kg = max(kg, np.max(evdiffG))
+                
         
         km *= n**2
         kc1 *= n**2
-
+        kc2 *= n**3
+        kg *= n
+        
+        print(km)
         print(kc1)
+        print(kc2)
+        print(kg)
         
 
         #evaluateMatrix(M, self.robot.q, self.robot.qd, self.robot.qdd)
@@ -197,6 +213,8 @@ class Adaptive_FFW(AdaptiveControl):
         q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
 
         self.checkGains(q_d, qd_d, qdd_d)
+        
+        exit(0)
 
         #Error
         e = q_d - q
