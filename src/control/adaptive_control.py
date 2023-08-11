@@ -38,7 +38,7 @@ class AdaptiveControl(TrajectoryControl):
 
             #Computation of actual dynamic parameters
             self.pi[shift+0] = self.robot.links[i].m 
-            self.beliefPi[shift+0] = self.pi[shift+0] + abs(np.random.normal(piShift_mean,piShift_stdev,1))
+            self.beliefPi[shift+0] = max(0, self.pi[shift+0] + np.random.normal(piShift_mean,piShift_stdev,1))
 
             self.pi[shift+1] = mr[0]
             self.beliefPi[shift+1] = self.pi[shift+1] + np.random.normal(piShift_mean,piShift_stdev,1)
@@ -50,7 +50,7 @@ class AdaptiveControl(TrajectoryControl):
             self.beliefPi[shift+3] = self.pi[shift+3] + np.random.normal(piShift_mean,piShift_stdev,1)
 
             self.pi[shift+4] = I_link[0,0] 
-            self.beliefPi[shift+4] = self.pi[shift+4] + np.random.normal(piShift_mean,piShift_stdev,1)
+            self.beliefPi[shift+4] = max(0, self.pi[shift+4] + np.random.normal(piShift_mean,piShift_stdev,1))
 
             self.pi[shift+5] = 0
             self.beliefPi[shift+5] = self.pi[shift+5] + np.random.normal(piShift_mean,piShift_stdev,1)
@@ -59,13 +59,13 @@ class AdaptiveControl(TrajectoryControl):
             self.beliefPi[shift+6] = self.pi[shift+6] + np.random.normal(piShift_mean,piShift_stdev,1)
 
             self.pi[shift+7] = I_link[1,1]
-            self.beliefPi[shift+7] = self.pi[shift+7] + np.random.normal(piShift_mean,piShift_stdev,1)
+            self.beliefPi[shift+7] = max(0,self.pi[shift+7] + np.random.normal(piShift_mean,piShift_stdev,1))
 
             self.pi[shift+8] = 0
-            self.beliefPi[shift+8] = self.pi[shift+8] + np.random.normal(piShift_mean,piShift_stdev,1)
+            self.beliefPi[shift+8] = max(0,self.pi[shift+8] + np.random.normal(piShift_mean,piShift_stdev,1))
 
             self.pi[shift+9] = I_link[2,2]
-            self.beliefPi[shift+9] = self.pi[shift+9] + np.random.normal(piShift_mean,piShift_stdev,1)
+            self.beliefPi[shift+9] = max(0,self.pi[shift+9] + np.random.normal(piShift_mean,piShift_stdev,1))
         
         dynamicModel.setDynamics(robot, self.beliefPi)
         
@@ -165,7 +165,7 @@ class Adaptive_FFW(AdaptiveControl):
         kc2 *= n**3
         kg *= n
                             
-        M = np.array(self.dynamicModel.inertia(q_d), dtype=float) 
+        M = np.array(self.dynamicModel.inertia(self.robot.q), dtype=float) 
         # qdd_N_MW = math.sqrt(np.matmul(np.matmul(qdd_d.T, M), qdd_d))
         qdd_N_MW = 1
         # qd_N_MW_sq = np.matmul(np.matmul(qd_d.T, M), qd_d)
