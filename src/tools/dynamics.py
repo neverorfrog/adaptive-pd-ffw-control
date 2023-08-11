@@ -59,13 +59,8 @@ class EulerLagrange():
     def movingFrames(self, robot):
         n = self.n
         g0 = sym.symbol("g")
-        dc = sym.symbol(f"dc(1:{n+1})")
-        a = sym.symbol(f"a(1:{n+1})")  # link lenghts
         gv = np.array([0, -g0, 0]) 
         ri = np.full((3,), sym.zero(), dtype = object) #vector from RF i-1 to i wrt RF i-1
-        rc = np.full((3,), sym.zero(), dtype = object) #position vector of COM i seen from RF i
-        rim1c = np.full((3,), sym.zero(), dtype = object) #vector from RF i-1 to COM as seen from RF i
-        riim1 = np.full((3,), sym.zero(), dtype = object) #vector from RF i to RF i-1 as seen from RF i
         Rinv = np.full((3,3), sym.zero(), dtype = object) #ith matrix representing rotation from Rf i to Rf i-1
         iwi = np.full((3,), sym.zero(), dtype = object) #angular velocity of link i wrt RF i
         ivi = np.full((3,), sym.zero(), dtype = object) #linear velocity of link i wrt RF i
@@ -83,14 +78,6 @@ class EulerLagrange():
             ri = A.t
             Ainv = A.inv()
             Rinv = Ainv.R #rotation from frame i+1 to i
-            riim1 = Ainv.t
-
-            #COM Position
-            if sigma == 0:
-                rim1c = Rinv @ [elem.subs(a[i],dc[i]) for elem in ri]
-                rc = riim1 + rim1c
-            else:
-                rc = [elem.subs(q[i],dc[i]) for elem in riim1]
                 
             #Kinetic Energy
             im1wi = iwi + (1-sigma) * q_d[i] * np.array([0,0,1]) #omega of link i wrt RF i-1 (3 x 1) 
@@ -104,7 +91,6 @@ class EulerLagrange():
             
             #Potential Energy
             rot0i = robot.A(i,q).R #transformation from RF 0 to RF i+1
-            rc = np.array([*rc , 1])
             r0i = robot.A(i,q).t
             Ui = -self.pi[offset+0]*np.matmul(gv,r0i) - np.matmul(gv, np.matmul(rot0i,mirci))
             U = U + Ui
