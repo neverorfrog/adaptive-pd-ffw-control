@@ -24,6 +24,11 @@ class AdaptiveControl(TrajectoryControl):
 
         dynamicModel.getY()
         dynamicModel.Y = dynamicModel.Y.subs(g0_sym, gravity[1])
+
+        piShift_stdev = 50
+        piShift_mean = 0
+
+
         for i in range(n):
             shift = 10*i
             dynamicModel.Y = dynamicModel.Y.subs(a_sym[i], self.robot.links[i].a)
@@ -33,34 +38,34 @@ class AdaptiveControl(TrajectoryControl):
 
             #Computation of actual dynamic parameters
             self.pi[shift+0] = self.robot.links[i].m 
-            self.beliefPi[shift+0] = self.pi[shift+0] + np.random.normal(0,20,1)
+            self.beliefPi[shift+0] = self.pi[shift+0] + abs(np.random.normal(piShift_mean,piShift_stdev,1))
 
             self.pi[shift+1] = mr[0]
-            self.beliefPi[shift+1] = self.pi[shift+1]
+            self.beliefPi[shift+1] = self.pi[shift+1] + np.random.normal(piShift_mean,piShift_stdev,1)
 
             self.pi[shift+2] = mr[1]
-            self.beliefPi[shift+2] = self.pi[shift+2]
+            self.beliefPi[shift+2] = self.pi[shift+2] + np.random.normal(piShift_mean,piShift_stdev,1)
 
             self.pi[shift+3] = mr[2]
-            self.beliefPi[shift+3] = self.pi[shift+3]
+            self.beliefPi[shift+3] = self.pi[shift+3] + np.random.normal(piShift_mean,piShift_stdev,1)
 
             self.pi[shift+4] = I_link[0,0] 
-            self.beliefPi[shift+4] = self.pi[shift+4] + np.random.normal(0,20,1)
+            self.beliefPi[shift+4] = self.pi[shift+4] + np.random.normal(piShift_mean,piShift_stdev,1)
 
             self.pi[shift+5] = 0
-            self.beliefPi[shift+5] = self.pi[shift+5]
+            self.beliefPi[shift+5] = self.pi[shift+5] + np.random.normal(piShift_mean,piShift_stdev,1)
 
             self.pi[shift+6] = 0
-            self.beliefPi[shift+6] = self.pi[shift+6]
+            self.beliefPi[shift+6] = self.pi[shift+6] + np.random.normal(piShift_mean,piShift_stdev,1)
 
             self.pi[shift+7] = I_link[1,1]
-            self.beliefPi[shift+7] = self.pi[shift+7] + np.random.normal(0,20,1)
+            self.beliefPi[shift+7] = self.pi[shift+7] + np.random.normal(piShift_mean,piShift_stdev,1)
 
             self.pi[shift+8] = 0
-            self.beliefPi[shift+8] = self.pi[shift+8]
+            self.beliefPi[shift+8] = self.pi[shift+8] + np.random.normal(piShift_mean,piShift_stdev,1)
 
             self.pi[shift+9] = I_link[2,2]
-            self.beliefPi[shift+9] = self.pi[shift+9] + np.random.normal(0,20,1)
+            self.beliefPi[shift+9] = self.pi[shift+9] + np.random.normal(piShift_mean,piShift_stdev,1)
         
         dynamicModel.setDynamics(robot, self.beliefPi)
         
@@ -216,7 +221,7 @@ class Adaptive_FFW(AdaptiveControl):
         torque = self.kp @ e + self.kd @ ed + np.matmul(actualY, self.beliefPi).astype(np.float64)
 
         # Update rule
-        gainMatrix = np.eye(n*10) * 0.02 # TODO: make this a parameter
+        gainMatrix = np.eye(n*10) * 0.1 # TODO: make this a parameter
         sat_e = np.array([sat(el) for el in e], dtype=np.float64)
         deltaPi = gainMatrix @ (actualY.T @ (sat_e+ed))
         self.beliefPi = self.beliefPi + deltaPi
@@ -244,7 +249,7 @@ if __name__ == "__main__":
     loop = Adaptive_FFW(robot, env, model, [0,-9.81,0])
     
     loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [500,300], kd = [50,35])
+    loop.setK(kp = [700,500], kd = [100,85])
     
     loop.simulate(dt = 0.01)
     loop.plot()
