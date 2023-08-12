@@ -67,7 +67,7 @@ class AdaptiveControl(TrajectoryControl):
             self.pi[shift+9] = I_link[2,2]
             self.beliefPi[shift+9] = max(0,self.pi[shift+9] + np.random.normal(piShift_mean,piShift_stdev,1))
         
-        dynamicModel.setDynamics(robot, self.beliefPi)
+        dynamicModel.setDynamics(robot, self.beliefPi) # TODO: update at every cycle
         
 
 class Adaptive_Facile(AdaptiveControl):
@@ -100,7 +100,7 @@ class Adaptive_Facile(AdaptiveControl):
         self.beliefPi = self.beliefPi + deltaPi
         
         #Torque computation
-        torque = self.kp @ e + self.kd @ ed + np.matmul(Y, self.beliefPi).astype(np.float64)
+        torque = self.kp @ e + self.kd @ ed + np.matmul(Y, self.pi).astype(np.float64) # TODO CAMBIAAA
         
         # Trajectory logging
         self.append(q_d,qd_d,qdd_d,torque)
@@ -117,9 +117,9 @@ class Adaptive_FFW(AdaptiveControl):
 
         n = len(self.robot.links)
 
-        M = self.dynamicModel.getM(self.robot, self.beliefPi)
+        M = self.dynamicModel.getM(self.robot, self.pi) # TODO CAMBIAAA
         M = sympy.Matrix(M)
-        g = self.dynamicModel.getG(self.robot, self.beliefPi)
+        g = self.dynamicModel.getG(self.robot, self.pi) # TODO CAMBIAAA
         g = sympy.Matrix(g)        
 
         q = sym.symbol(f"q(1:{n+1})")  # link variables
@@ -134,7 +134,7 @@ class Adaptive_FFW(AdaptiveControl):
 
         for i in range(n):
             diffM = M.diff(q[i])
-            c_i = self.dynamicModel.getChristoffel(i, self.robot, self.beliefPi)
+            c_i = self.dynamicModel.getChristoffel(i, self.robot, self.pi) # TODO CAMBIAAA
             diffG = g.diff(q[i])
             diffc_i = c_i.diff(q[i])
             for configuration in itertools.product(*tmp_cand):
@@ -161,11 +161,35 @@ class Adaptive_FFW(AdaptiveControl):
                 
         
         km *= n**2
-        kc1 *= n**2
+        kc1 *= n**2 # IL GRID SEARCH DICE 1/2 O 1/N .... Dipende
         kc2 *= n**3
-        kg *= n
-                            
+        kg *= n # IL GRID SEARCH DICE 1/2 O 1/N .... Dipende
+
+        BEST = []
+        maxr = 0
+        for q1 in np.arange(-pi, pi, 0.5):
+            for q2 in np.arange(-pi, pi, 0.5):
+
+                for qq1 in np.arange(-1, 1, 0.3):
+                    for qq2 in np.arange(-1, 1, 0.3):
+
+                        for qqq1 in np.arange(-1, 1, 0.3):
+                            for qqq2 in np.arange(-1, 1, 0.3):
+                                print(q1,q2,qq1,qq2,maxr)
+                                if(np.linalg.norm(np.array([qq1,qq2]))*np.linalg.norm(np.array([qqq1,qqq2])) == 0):
+                                    continue
+                                c = self.robot.coriolis([q1,q2], [qq1,qq2])
+                                ratio = np.linalg.norm(np.matmul(c, np.array([qqq1,qqq2])))/ (np.linalg.norm(np.array([qq1,qq2]))*np.linalg.norm(np.array([qqq1,qqq2])))
+                                if ratio > maxr:
+                                    maxr = ratio
+                                    BEST = [q1,q2,qq1,qq2,qqq1,qqq2]
+
+        print(f"WITH ITERATIVE METHOD: {maxr} WITH CLOSED METHOD: {kc1} BEST: {BEST}")
+
+        exit(0)
+
         M = np.array(self.dynamicModel.inertia(self.robot.q), dtype=float) 
+        print(lambdaMax(M))
         # qdd_N_MW = math.sqrt(np.matmul(np.matmul(qdd_d.T, M), qdd_d))
         qdd_N_MW = 1
         # qd_N_MW_sq = np.matmul(np.matmul(qd_d.T, M), qd_d)
@@ -210,7 +234,7 @@ class Adaptive_FFW(AdaptiveControl):
         #Reference Configuration
         q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
 
-        #self.checkGains(q_d, qd_d, qdd_d)
+        self.checkGains(q_d, qd_d, qdd_d)
 
         #Error
         e = q_d - q
@@ -219,6 +243,9 @@ class Adaptive_FFW(AdaptiveControl):
 
         actualY = self.dynamicModel.evaluateY(q_d, qd_d, qd_d, qdd_d)
         torque = self.kp @ e + self.kd @ ed + np.matmul(actualY, self.beliefPi).astype(np.float64)
+
+        bound = 1e7
+        torque = np.clip(torque, -bound, bound)
 
         # Update rule
         gainMatrix = np.eye(n*10) * 0.1 # TODO: make this a parameter
@@ -240,7 +267,7 @@ if __name__ == "__main__":
     goal = [pi/2,pi/2]
     
     T = 3
-    traj = ClippedTrajectory(robot.q, goal, T)
+    traj = ClippedTrajectory([-pi/2,0], goal, T)
 
     symrobot = SymbolicPlanarRobot(n)
     model = EulerLagrange(symrobot)
@@ -249,7 +276,7 @@ if __name__ == "__main__":
     loop = Adaptive_FFW(robot, env, model, [0,-9.81,0])
     
     loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [700,500], kd = [100,85])
+    loop.setK(kp = [7e5,7e5], kd = [3e4,3e4])
     
-    loop.simulate(dt = 0.01)
+    loop.simulate(dt = 0.0001)
     loop.plot()
