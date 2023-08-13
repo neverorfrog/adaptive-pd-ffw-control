@@ -1,3 +1,5 @@
+import time
+import pprint
 import numpy as np
 from sympy import Add, poly, S
 from roboticstoolbox.tools.trajectory import *
@@ -27,6 +29,22 @@ class ClippedTrajectory():
 
     def getTrajList(self):
         return self.functions
+    
+class Profiler():
+    logger = dict()
+    process_name = ""
+    lastCheckpoint = 0
+
+    def start(self, name):
+        Profiler.lastCheckpoint = time.process_time()
+        Profiler.process_name = name
+
+    def stop(self):
+        tmpCheckpoint = time.process_time()
+        Profiler.logger[Profiler.process_name] = tmpCheckpoint - Profiler.lastCheckpoint
+
+    def print(self):
+        pprint.pprint(Profiler.logger)
     
 def sat(x, m=1):
     return min(max(-1, m*x), 1)

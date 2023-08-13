@@ -85,6 +85,7 @@ class Control():
         q_d = np.array(self.q_d)
         qd_d = np.array(self.qd_d)
         qdd_d = np.array(self.qdd_d)
+        e = np.abs(np.subtract(q_d,q))
         u = np.array(self.u)
         
         fig.suptitle("Joint data in function of time")

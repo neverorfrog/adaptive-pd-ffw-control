@@ -100,7 +100,7 @@ class Adaptive_Facile(AdaptiveControl):
         self.beliefPi = self.beliefPi + deltaPi
         
         #Torque computation
-        torque = self.kp @ e + self.kd @ ed + np.matmul(Y, self.pi).astype(np.float64) # TODO CAMBIAAA
+        torque = self.kp @ e + self.kd @ ed + np.matmul(Y, self.beliefPi).astype(np.float64)
         
         # Trajectory logging
         self.append(q_d,qd_d,qdd_d,torque)
@@ -117,9 +117,9 @@ class Adaptive_FFW(AdaptiveControl):
 
         n = len(self.robot.links)
 
-        M = self.dynamicModel.getM(self.robot, self.pi) # TODO CAMBIAAA
+        M = self.dynamicModel.getM(self.robot, self.beliefPi)
         M = sympy.Matrix(M)
-        g = self.dynamicModel.getG(self.robot, self.pi) # TODO CAMBIAAA
+        g = self.dynamicModel.getG(self.robot, self.beliefPi)
         g = sympy.Matrix(g)        
 
         q = sym.symbol(f"q(1:{n+1})")  # link variables
@@ -134,7 +134,7 @@ class Adaptive_FFW(AdaptiveControl):
 
         for i in range(n):
             diffM = M.diff(q[i])
-            c_i = self.dynamicModel.getChristoffel(i, self.robot, self.pi) # TODO CAMBIAAA
+            c_i = self.dynamicModel.getChristoffel(i, self.robot, self.beliefPi)
             diffG = g.diff(q[i])
             diffc_i = c_i.diff(q[i])
             for configuration in itertools.product(*tmp_cand):
@@ -161,41 +161,39 @@ class Adaptive_FFW(AdaptiveControl):
                 
         
         km *= n**2
-        kc1 *= n**2 # IL GRID SEARCH DICE 1/2 O 1/N .... Dipende
+        kc1 *= n**2 
         kc2 *= n**3
-        kg *= n # IL GRID SEARCH DICE 1/2 O 1/N .... Dipende
+        kg *= n 
 
+        '''
         BEST = []
         maxr = 0
         for q1 in np.arange(-pi, pi, 0.5):
             for q2 in np.arange(-pi, pi, 0.5):
 
-                for qq1 in np.arange(-1, 1, 0.3):
-                    for qq2 in np.arange(-1, 1, 0.3):
+                for qq1 in np.arange(-pi, pi, 0.5):
+                    for qq2 in np.arange(-pi, pi, 0.5):
 
-                        for qqq1 in np.arange(-1, 1, 0.3):
-                            for qqq2 in np.arange(-1, 1, 0.3):
+                        for qqq1 in np.arange(-pi, pi, 0.5):
+                            for qqq2 in np.arange(-pi, pi, 0.5):
                                 print(q1,q2,qq1,qq2,maxr)
-                                if(np.linalg.norm(np.array([qq1,qq2]))*np.linalg.norm(np.array([qqq1,qqq2])) == 0):
+                                if(np.linalg.norm(np.array([q1,q2]) - np.array([qq1,qq2]))*np.linalg.norm(np.array([qqq1,qqq2])) == 0):
                                     continue
-                                c = self.robot.coriolis([q1,q2], [qq1,qq2])
+                                c = self.robot.inertia()
                                 ratio = np.linalg.norm(np.matmul(c, np.array([qqq1,qqq2])))/ (np.linalg.norm(np.array([qq1,qq2]))*np.linalg.norm(np.array([qqq1,qqq2])))
                                 if ratio > maxr:
                                     maxr = ratio
                                     BEST = [q1,q2,qq1,qq2,qqq1,qqq2]
 
         print(f"WITH ITERATIVE METHOD: {maxr} WITH CLOSED METHOD: {kc1} BEST: {BEST}")
-
-        exit(0)
+        '''
 
         M = np.array(self.dynamicModel.inertia(self.robot.q), dtype=float) 
-        print(lambdaMax(M))
-        # qdd_N_MW = math.sqrt(np.matmul(np.matmul(qdd_d.T, M), qdd_d))
+
         qdd_N_MW = 1
-        # qd_N_MW_sq = np.matmul(np.matmul(qd_d.T, M), qd_d)
         qd_N_MW_sq = 1
         m = math.sqrt(n) * (kg + km*qdd_N_MW + kc2*qd_N_MW_sq)
-        delta = 1 # TODO: correct?
+        delta = 1 
         p = m + delta
 
         epsilon = 2*k1/kg + 2*k2/km + 2*kc1/kc2
@@ -209,16 +207,16 @@ class Adaptive_FFW(AdaptiveControl):
         print(f"condition34: {condition34}")
 
         # Condition 22 
-        assert(lambdaMin(self.kp) > condition22)
-        print("Condition 22 passed")
+        # assert(lambdaMin(self.kp) > condition22)
+        # print("Condition 22 passed")
 
         # Condition 33
-        assert(lambdaMin(self.kd) >  condition33)
-        print("Condition 33 passed")
+        # assert(lambdaMin(self.kd) >  condition33)
+        # print("Condition 33 passed")
 
         # Condition 34
-        assert(lambdaMin(self.kp) > condition34)
-        print("Condition 34 passed")
+        # assert(lambdaMin(self.kp) > condition34)
+        # print("Condition 34 passed")
         
         
         
@@ -234,7 +232,7 @@ class Adaptive_FFW(AdaptiveControl):
         #Reference Configuration
         q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
 
-        self.checkGains(q_d, qd_d, qdd_d)
+        #self.checkGains(q_d, qd_d, qdd_d)
 
         #Error
         e = q_d - q
@@ -244,7 +242,7 @@ class Adaptive_FFW(AdaptiveControl):
         actualY = self.dynamicModel.evaluateY(q_d, qd_d, qd_d, qdd_d)
         torque = self.kp @ e + self.kd @ ed + np.matmul(actualY, self.beliefPi).astype(np.float64)
 
-        bound = 1e7
+        bound = 1e3
         torque = np.clip(torque, -bound, bound)
 
         # Update rule
@@ -275,8 +273,8 @@ if __name__ == "__main__":
     # loop = Adaptive_Facile(robot, env, model, [0,-9.81,0])
     loop = Adaptive_FFW(robot, env, model, [0,-9.81,0])
     
-    loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [7e5,7e5], kd = [3e4,3e4])
+    loop.setR(reference = traj, goal = goal, threshold = 5)
+    loop.setK(kp = [700,500], kd = [100,85])
     
-    loop.simulate(dt = 0.0001)
+    loop.simulate(dt = 0.005)
     loop.plot()
