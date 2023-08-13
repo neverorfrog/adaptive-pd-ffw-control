@@ -1,4 +1,5 @@
 import numpy as np
+from roboticstoolbox.models.DH import Stanford
 
 from tools.robots import *
 from tools.control import Control
@@ -8,20 +9,19 @@ from tools.utils import *
 from roboticstoolbox.backends.PyPlot import PyPlot
 from math import pi
 from roboticstoolbox.tools.trajectory import *
-# from tabulate import tabulate
 import spatialmath.base.symbolic as sym
 
 
 class TrajectoryControl(Control):
-    def __init__(self, robot=None, env=None, gravity=[0,0,0]):
-        super().__init__(robot, env)
+    def __init__(self, robot=None, env=None, gravity=[0,0,0], plotting = True):
+        super().__init__(robot, env, plotting)
         self.gravity = gravity
         self.u = [robot.gravload(self.robot.q, gravity)]
         
     def apply(self, torque) -> None:
         #numerical integration (runge kutta 2)
         qd2 = self.robot.qd + (self.dt/2)*self.robot.qdd; 
-        q2 = self.robot.q + self.dt/2*qd2; 
+        q2 = self.robot.q + self.dt/2*qd2
         qdd2 = self.robot.accel(q2,qd2, torque, gravity = self.gravity)
         self.robot.qd = self.robot.qd + self.dt*qdd2
         
@@ -74,10 +74,7 @@ class Feedforward(TrajectoryControl):
         
         #Feedback action
         torque = torque_ff + self.kp @ e + self.kd @ ed
-        
-        print(f"KDKP: {self.kp @ e + self.kd @ ed}")
-        print(f"tau: {torque_ff}")
-        
+                        
         # Trajectory logging
         self.append(q_d,qd_d,qdd_d,torque)
 
@@ -125,7 +122,7 @@ if __name__ == "__main__":
     loop = Feedforward(robot, env, [0,-9.81,0])
 
     loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [200,100], kd = [100,60])
+    loop.setK(kp = [200,80], kd = [50,20])
     
     loop.simulate(dt = 0.01)
     loop.plot()

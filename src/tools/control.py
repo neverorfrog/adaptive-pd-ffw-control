@@ -8,10 +8,9 @@ import matplotlib.pyplot as plt
 
 class Control():
     
-    def __init__(self, robot = None, env = None):
+    def __init__(self, robot = None, env = None, plotting = True):
         #env 
         self.env = env
-        env.launch(realtime=True)
         
         #robot 
         self.robot = robot
@@ -19,9 +18,13 @@ class Control():
         self.robot.qd = np.zeros((robot.n))
         self.robot.qdd = np.zeros((robot.n))
         
-        env.add(robot)
+        #realtime plotting
+        if plotting:
+            env.launch(realtime=True)
+            env.add(robot)
+        self.plotting = plotting
         
-        #For simulation plotting purposes
+        #offline plotting 
         self.q = [np.array(self.robot.q)]
         self.qd = [np.array(self.robot.qd)]
         self.qdd = [np.array(self.robot.qdd)]
@@ -73,7 +76,11 @@ class Control():
             signal, arrived = self.feedback()
             self.i += 1
             self.apply(signal)
-            self.env.step(self.dt)
+            if self.plotting:
+                self.env.step(self.dt)
+            else:
+                for i in range(self.robot.n):
+                    self.robot.q[i] += self.robot.qd[i] * (dt)
                 
                 
     def plot(self):        

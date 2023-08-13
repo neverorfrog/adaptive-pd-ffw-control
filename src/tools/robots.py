@@ -43,28 +43,26 @@ class TwoLink(DHRobot):
 
         from math import pi
         zero = 0.0
-        a1 = 0.45
-        a2 = 0.5
         deg = pi / 180
             
         # links
         link1 = RevoluteDH(
             alpha = 0, #link twist
-            a = a1, #link length
+            a = 0.5, #link length
             d = 0, #offset along the z axis
-            m = 23.9, #mass of the link
-            r = [0.11,0,0], #position of COM with respect to link frame
-            I=[0, 0, 1.26, 0, 0, 0], #inertia tensor,
+            m = 20, #mass of the link
+            r = [-0.35,0,0], #position of COM with respect to link frame
+            I=[0, 0, 0.2, 0, 0, 0], #inertia tensor,
             B = 0, #viscous friction
             qlim=[-135 * deg, 135 * deg]
         )
         link2 = RevoluteDH(
             alpha = 0,
-            a = a2,
+            a = 0.5,
             d = 0,
-            m = 10.88,
-            r = [0.078,0,0],
-            I=[0, 0, 0.048, 0, 0, 0],
+            m = 10,
+            r = [-0.25,0,0],
+            I=[0, 0, 0.2, 0, 0, 0],
             B = 0,
             qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
         )

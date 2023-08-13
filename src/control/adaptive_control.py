@@ -10,8 +10,8 @@ from tools.dynamics import *
 import itertools
 
 class AdaptiveControl(TrajectoryControl):
-    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0]):
-        super().__init__(robot, env, gravity)
+    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0], plotting = True):
+        super().__init__(robot, env, gravity, plotting)
         self.dynamicModel = dynamicModel
 
         n = len(self.robot.links)
@@ -25,7 +25,7 @@ class AdaptiveControl(TrajectoryControl):
         dynamicModel.getY()
         dynamicModel.Y = dynamicModel.Y.subs(g0_sym, gravity[1])
 
-        piShift_stdev = 50
+        piShift_stdev = 10
         piShift_mean = 0
 
 
@@ -34,7 +34,7 @@ class AdaptiveControl(TrajectoryControl):
             dynamicModel.Y = dynamicModel.Y.subs(a_sym[i], self.robot.links[i].a)
 
             I_link = self.robot.links[i].I + self.robot.links[i].m*np.matmul(skew(self.robot.links[i].r).T, skew(self.robot.links[i].r))
-            mr = self.robot.links[i].m*self.robot.links[i].r #+ np.random.normal(0,1,3)
+            mr = self.robot.links[i].m*self.robot.links[i].r 
 
             #Computation of actual dynamic parameters
             self.pi[shift+0] = self.robot.links[i].m 
@@ -72,8 +72,8 @@ class AdaptiveControl(TrajectoryControl):
 
 class Adaptive_Facile(AdaptiveControl):
     
-    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0]):
-        super().__init__(robot, env, dynamicModel, gravity)
+    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0], plotting = True):
+        super().__init__(robot, env, dynamicModel, gravity, plotting)
         
     def feedback(self):
         
@@ -95,23 +95,27 @@ class Adaptive_Facile(AdaptiveControl):
         
         #Update Law
         Y = self.dynamicModel.evaluateY(q_d, qd_d, qd_r, qdd_r)
-        gainMatrix = np.eye(n*10) # TODO: make this a parameter
+        gainMatrix = np.eye(n*10) * 0.01 # TODO: make this a parameter
         deltaPi = (gainMatrix @ Y.T) @ ed_r
         self.beliefPi = self.beliefPi + deltaPi
         
-        #Torque computation
-        torque = self.kp @ e + self.kd @ ed + np.matmul(Y, self.beliefPi).astype(np.float64)
+        #Torque computation        
+        torque = np.matmul(self.kp,e) + np.matmul(self.kd,ed) + np.matmul(Y, self.beliefPi).astype(np.float64) # TODO CAMBIAAA
+        
+        bound = 700
+        torque = np.clip(torque, -bound, bound)
         
         # Trajectory logging
         self.append(q_d,qd_d,qdd_d,torque)
                 
+        print(f"u: {torque}")
         return torque, arrived
         
 
 class Adaptive_FFW(AdaptiveControl):
 
-    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0]):
-        super().__init__(robot, env, dynamicModel, gravity)
+    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0], plotting = True):
+        super().__init__(robot, env, dynamicModel, gravity, plotting)
 
     def checkGains(self, q_d, qd_d, qdd_d):
 
@@ -119,7 +123,7 @@ class Adaptive_FFW(AdaptiveControl):
 
         M = self.dynamicModel.getM(self.robot, self.beliefPi)
         M = sympy.Matrix(M)
-        g = self.dynamicModel.getG(self.robot, self.beliefPi)
+        g = self.dynamicModel.getG(self.robot, self.pi) # TODO CAMBIAAA
         g = sympy.Matrix(g)        
 
         q = sym.symbol(f"q(1:{n+1})")  # link variables
@@ -135,6 +139,7 @@ class Adaptive_FFW(AdaptiveControl):
         for i in range(n):
             diffM = M.diff(q[i])
             c_i = self.dynamicModel.getChristoffel(i, self.robot, self.beliefPi)
+            c_i = self.dynamicModel.getChristoffel(i, self.robot, self.beliefPi) # TODO CAMBIAAA
             diffG = g.diff(q[i])
             diffc_i = c_i.diff(q[i])
             for configuration in itertools.product(*tmp_cand):
@@ -189,22 +194,23 @@ class Adaptive_FFW(AdaptiveControl):
         '''
 
         M = np.array(self.dynamicModel.inertia(self.robot.q), dtype=float) 
-
-        qdd_N_MW = 1
-        qd_N_MW_sq = 1
-        m = math.sqrt(n) * (kg + km*qdd_N_MW + kc2*qd_N_MW_sq)
+        qdd_bound = 1
+        qd_bound = 1
+        m = math.sqrt(n) * (kg + km*qdd_bound + kc2*(qd_bound**2))
         delta = 1 
         p = m + delta
-
-        epsilon = 2*k1/kg + 2*k2/km + 2*kc1/kc2
         
+        epsilon = 2*k1/kg + 2*k2/km + 2*kc1/kc2
+                
         condition22 = p**2 * lambdaMax(M)
-        condition33 = 2*(math.sqrt(n)*kc1*p*epsilon + p*lambdaMax(M) + kc1*math.sqrt(qd_N_MW_sq))
-        condition34 = 3*p + (p*(2*kc1*math.sqrt(qd_N_MW_sq) + 2*lambdaMax(self.kd) + 3)**2)/(2*lambdaMin(self.kd))
+        condition33 = 2*(math.sqrt(n)*kc1*p*epsilon + p*lambdaMax(M) + kc1*math.sqrt(qd_bound))
+        condition34 = 3*p + (p * (2*kc1*math.sqrt(qd_bound) + lambdaMax(self.kd) + 3)**2)/(2*lambdaMin(self.kd))
         
         print(f"condition22: {condition22}")
         print(f"condition33: {condition33}")
         print(f"condition34: {condition34}")
+        
+        exit(0)
 
         # Condition 22 
         # assert(lambdaMin(self.kp) > condition22)
@@ -218,8 +224,7 @@ class Adaptive_FFW(AdaptiveControl):
         # assert(lambdaMin(self.kp) > condition34)
         # print("Condition 34 passed")
         
-        
-        
+             
     def feedback(self):
         '''Computes the torque necessary to follow the reference trajectory'''
 
@@ -232,17 +237,15 @@ class Adaptive_FFW(AdaptiveControl):
         #Reference Configuration
         q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
 
-        #self.checkGains(q_d, qd_d, qdd_d)
-
         #Error
         e = q_d - q
         ed = qd_d - qd
         arrived = self.check_termination(e,ed)
 
         actualY = self.dynamicModel.evaluateY(q_d, qd_d, qd_d, qdd_d)
-        torque = self.kp @ e + self.kd @ ed + np.matmul(actualY, self.beliefPi).astype(np.float64)
-
-        bound = 1e3
+        torque = np.matmul(self.kp,e) + np.matmul(self.kd,ed) + np.matmul(actualY, self.beliefPi).astype(np.float64)
+        
+        bound = 700
         torque = np.clip(torque, -bound, bound)
 
         # Update rule
@@ -253,28 +256,27 @@ class Adaptive_FFW(AdaptiveControl):
 
         # Trajectory logging
         self.append(q_d,qd_d,qdd_d,torque)
-
+        
         return torque, arrived
     
 if __name__ == "__main__":
     
     #robot and environment creation
-    n = 2
     robot = TwoLink()
     env = PyPlot()
     goal = [pi/2,pi/2]
     
     T = 3
-    traj = ClippedTrajectory([-pi/2,0], goal, T)
+    traj = ClippedTrajectory(robot.q, goal, T)
 
-    symrobot = SymbolicPlanarRobot(n)
+    symrobot = SymbolicPlanarRobot(2)
     model = EulerLagrange(symrobot)
         
     # loop = Adaptive_Facile(robot, env, model, [0,-9.81,0])
-    loop = Adaptive_FFW(robot, env, model, [0,-9.81,0])
+    loop = Adaptive_FFW(robot, env, model, [0,-9.81,0], plotting = False)
     
-    loop.setR(reference = traj, goal = goal, threshold = 5)
-    loop.setK(kp = [700,500], kd = [100,85])
+    loop.setR(reference = traj, goal = goal, threshold = 0.05)
+    loop.setK(kp = [200,120], kd = [40,25])
     
-    loop.simulate(dt = 0.005)
+    loop.simulate(dt = 0.01)
     loop.plot()
