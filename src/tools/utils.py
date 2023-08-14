@@ -2,6 +2,7 @@ import time
 import pprint
 import numpy as np
 from sympy import Add, poly, S
+import sympy
 from roboticstoolbox.tools.trajectory import *
 
 class ClippedTrajectory():
@@ -65,6 +66,19 @@ def coeff_dict(expr, *vars):
         assert 1 not in rv
         rv.update({S.One: i})
     return rv
+
+def efficient_coeff_dict(expr, vars):
+    poly = sympy.Poly(expr, vars)
+    terms = poly.as_expr().as_ordered_terms()
+    coeffs = poly.coeffs()
+
+    d = dict()
+
+    for i in range(len(terms)):
+        mult = terms[i].args[0] if isinstance(terms[i].args[0], sympy.Pow) else terms[i].args[0]*terms[i].args[1]
+        d[mult] = coeffs[i]
+    
+    return d
 
 def norm(v):
     sqnorm = float((v.T).dot(v))

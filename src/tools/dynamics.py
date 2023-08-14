@@ -1,7 +1,7 @@
 import numpy as np
 import spatialmath.base.symbolic as sym
 import sympy
-from tools.utils import skew, index2var, coeff_dict, Profiler
+from tools.utils import skew, index2var, coeff_dict, Profiler, efficient_coeff_dict
 from tools.robots import *
 class EulerLagrange():
 
@@ -30,7 +30,9 @@ class EulerLagrange():
         
         #Inertia Matrix
         self.profiler.start("Inertia Matrix")
-        coeffs = coeff_dict(T, *q_d)
+
+        coeffs = efficient_coeff_dict(T, q_d)
+        
         self.M = np.full((n,n), sym.zero(), dtype = object)
         for row in range(n):
             self.M[row,:] = [coeffs[index2var(row,column,q_d)] for column in range(n)]

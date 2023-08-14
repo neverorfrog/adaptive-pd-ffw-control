@@ -210,7 +210,6 @@ class Adaptive_FFW(AdaptiveControl):
         print(f"condition33: {condition33}")
         print(f"condition34: {condition34}")
         
-        exit(0)
 
         # Condition 22 
         # assert(lambdaMin(self.kp) > condition22)
