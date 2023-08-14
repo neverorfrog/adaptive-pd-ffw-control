@@ -267,16 +267,19 @@ if __name__ == "__main__":
     goal = [pi/2,pi/2]
     
     T = 3
-    traj = ClippedTrajectory(robot.q, goal, T)
+    traj = ClippedTrajectory([0,pi/6], goal, T)
 
     symrobot = SymbolicPlanarRobot(2)
     model = EulerLagrange(symrobot)
         
     # loop = Adaptive_Facile(robot, env, model, [0,-9.81,0])
-    loop = Adaptive_FFW(robot, env, model, [0,-9.81,0], plotting = False)
+    loop = Adaptive_FFW(robot, env, model, [0,-9.81,0], plotting = True) #planar
+    # loop = Adaptive_FFW(robot, env, model, [0,0,-9.81], plotting = True) #3D
+    
     
     loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [200,120], kd = [40,25])
+    loop.setK(kp = [200,80], kd = [50,20]) #2R
+    # loop.setK(kp=) #Panda
     
     loop.simulate(dt = 0.01)
     loop.plot()
