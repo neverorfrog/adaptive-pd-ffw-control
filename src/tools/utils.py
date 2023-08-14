@@ -36,15 +36,15 @@ class Profiler():
     process_name = ""
     lastCheckpoint = 0
 
-    def start(self, name):
+    def start(name):
         Profiler.lastCheckpoint = time.process_time()
         Profiler.process_name = name
 
-    def stop(self):
+    def stop():
         tmpCheckpoint = time.process_time()
         Profiler.logger[Profiler.process_name] = tmpCheckpoint - Profiler.lastCheckpoint
 
-    def print(self):
+    def print():
         pprint.pprint(Profiler.logger)
     
 def sat(x, m=1):

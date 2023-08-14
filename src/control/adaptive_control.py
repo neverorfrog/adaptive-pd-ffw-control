@@ -22,14 +22,18 @@ class AdaptiveControl(TrajectoryControl):
         self.pi = np.zeros(10*n)
         self.beliefPi = np.zeros(10*n)
 
+        Profiler.start("Y gravity substitution")
         dynamicModel.getY()
-        dynamicModel.Y = dynamicModel.Y.subs(g0_sym, gravity[1])
-
+        gravIdx = np.nonzero(gravity)[0][0]
+        dynamicModel.Y = dynamicModel.Y.subs(g0_sym, gravity[gravIdx])
+        Profiler.stop()
         piShift_stdev = 10
         piShift_mean = 0
 
 
         for i in range(n):
+            Profiler.start(f"subs {i} stage")
+
             shift = 10*i
             dynamicModel.Y = dynamicModel.Y.subs(a_sym[i], self.robot.links[i].a)
 
@@ -66,8 +70,9 @@ class AdaptiveControl(TrajectoryControl):
 
             self.pi[shift+9] = I_link[2,2]
             self.beliefPi[shift+9] = max(0,self.pi[shift+9] + np.random.normal(piShift_mean,piShift_stdev,1))
-        
+            Profiler.stop()
         dynamicModel.setDynamics(robot, self.beliefPi) # TODO: update at every cycle
+        Profiler.print()
         
 
 class Adaptive_Facile(AdaptiveControl):
@@ -123,7 +128,7 @@ class Adaptive_FFW(AdaptiveControl):
 
         M = self.dynamicModel.getM(self.robot, self.beliefPi)
         M = sympy.Matrix(M)
-        g = self.dynamicModel.getG(self.robot, self.pi) # TODO CAMBIAAA
+        g = self.dynamicModel.getG(self.robot, self.beliefPi) # TODO CAMBIAAA
         g = sympy.Matrix(g)        
 
         q = sym.symbol(f"q(1:{n+1})")  # link variables
@@ -139,7 +144,7 @@ class Adaptive_FFW(AdaptiveControl):
         for i in range(n):
             diffM = M.diff(q[i])
             c_i = self.dynamicModel.getChristoffel(i, self.robot, self.beliefPi)
-            c_i = self.dynamicModel.getChristoffel(i, self.robot, self.beliefPi) # TODO CAMBIAAA
+            c_i = self.dynamicModel.getChristoffel(i, self.robot, self.beliefPi)
             diffG = g.diff(q[i])
             diffc_i = c_i.diff(q[i])
             for configuration in itertools.product(*tmp_cand):
@@ -226,7 +231,7 @@ class Adaptive_FFW(AdaptiveControl):
              
     def feedback(self):
         '''Computes the torque necessary to follow the reference trajectory'''
-
+        Profiler.start("feedback loop")
         n = len(self.robot.links)
 
         #Current configuration
@@ -242,6 +247,7 @@ class Adaptive_FFW(AdaptiveControl):
         arrived = self.check_termination(e,ed)
 
         actualY = self.dynamicModel.evaluateY(q_d, qd_d, qd_d, qdd_d)
+
         torque = np.matmul(self.kp,e) + np.matmul(self.kd,ed) + np.matmul(actualY, self.beliefPi).astype(np.float64)
         
         bound = 700
@@ -255,29 +261,33 @@ class Adaptive_FFW(AdaptiveControl):
 
         # Trajectory logging
         self.append(q_d,qd_d,qdd_d,torque)
+        Profiler.stop()
+        print("Feedback loop took {:.2f} s".format(Profiler.logger["feedback loop"]))
         
         return torque, arrived
     
 if __name__ == "__main__":
     
     #robot and environment creation
-    robot = TwoLink()
+    #robot = ThreeLink()
+    robot = models.DH.Puma560()
     env = PyPlot()
-    goal = [pi/2,pi/2]
-    
-    T = 3
-    traj = ClippedTrajectory([0,pi/6], goal, T)
+    goal = [pi,-pi/2,0,-pi/2,pi/2,-pi/2]
 
-    symrobot = SymbolicPlanarRobot(2)
+    T = 3
+    traj = ClippedTrajectory(robot.q, goal, T)
+
+    symrobot = SymbolicPlanarRobot(6)
     model = EulerLagrange(symrobot)
+    Profiler.print()
         
     # loop = Adaptive_Facile(robot, env, model, [0,-9.81,0])
-    loop = Adaptive_FFW(robot, env, model, [0,-9.81,0], plotting = True) #planar
+    loop = Adaptive_FFW(robot, env, model, [0,0,-9.81], plotting = True) #planar
     # loop = Adaptive_FFW(robot, env, model, [0,0,-9.81], plotting = True) #3D
     
     
     loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [200,80], kd = [50,20]) #2R
+    loop.setK(kp = [300,300,300,300,300,150], kd = [90,90,90,90,90,60]) #3R
     # loop.setK(kp=) #Panda
     
     loop.simulate(dt = 0.01)

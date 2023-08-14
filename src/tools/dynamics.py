@@ -10,7 +10,6 @@ class EulerLagrange():
         realrobot for kinematic parameters
         pi for dynamic parameters that we believe are ground truth
         '''
-        self.profiler = Profiler()
         self.robot = robot
         self.n = len(robot.links); n = self.n
         self.Y = None
@@ -24,12 +23,12 @@ class EulerLagrange():
         self.pi = sym.symbol(f"pi_(1:{10*n+1})")
 
         #Kinetic and Potential energy
-        self.profiler.start("Moving Frames")
+        Profiler.start("Moving Frames")
         T,U = self.movingFrames(robot)
-        self.profiler.stop()
+        Profiler.stop()
         
         #Inertia Matrix
-        self.profiler.start("Inertia Matrix")
+        Profiler.start("Inertia Matrix")
 
         coeffs = efficient_coeff_dict(T, q_d)
         
@@ -37,10 +36,10 @@ class EulerLagrange():
         for row in range(n):
             self.M[row,:] = [coeffs[index2var(row,column,q_d)] for column in range(n)]
         self.M = (np.ones((n,n))+np.diag([1]*n))*self.M
-        self.profiler.stop()
+        Profiler.stop()
 
         #Coriolis and centrifugal terms and gravity terms
-        self.profiler.start("Coriolis and centifugal")
+        Profiler.start("Coriolis and centifugal")
         self.S = np.full((n,), sym.zero(), dtype = object)
         self.g = np.full((n,), sym.zero(), dtype = object)
         M = sympy.Matrix(self.M)
@@ -49,14 +48,13 @@ class EulerLagrange():
             C = 0.5 * (C_temp + C_temp.T - M.diff(q[i]))
             self.S[i] = np.matmul(q_d, C)
             self.g[i] = -U.diff(q[i])
-        self.profiler.stop()
+        Profiler.stop()
         
-        self.profiler.start("Regressor Matrix")
+        Profiler.start("Regressor Matrix")
         symModel = sympy.Matrix(self.getDynamicModel())
         self.Y = symModel.jacobian(self.pi)
-        self.profiler.stop()
+        Profiler.stop()
 
-        self.profiler.print()
         
         
     def setDynamics(self, realrobot, pi):
