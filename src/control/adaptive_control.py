@@ -24,9 +24,11 @@ class AdaptiveControl(TrajectoryControl):
         Profiler.start("Y gravity substitution")
         dynamicModel.getY()
         gravIdx = np.nonzero(gravity)[0][0]
-        dynamicModel.Y = dynamicModel.Y.subs(g0_sym, gravity[gravIdx])
+        d = dict()
+        d[g0_sym] = gravity[gravIdx]
+
         Profiler.stop()
-        piShift_stdev = 10
+        piShift_stdev = 20
         piShift_mean = 0
 
 
@@ -34,7 +36,7 @@ class AdaptiveControl(TrajectoryControl):
             Profiler.start(f"subs {i} stage")
 
             shift = 10*i
-            dynamicModel.Y = dynamicModel.Y.subs(a_sym[i], self.robot.links[i].a)
+            d[a_sym[i]] = self.robot.links[i].a
 
             I_link = self.robot.links[i].I + self.robot.links[i].m*np.matmul(skew(self.robot.links[i].r).T, skew(self.robot.links[i].r))
             mr = self.robot.links[i].m*self.robot.links[i].r 
@@ -55,22 +57,24 @@ class AdaptiveControl(TrajectoryControl):
             self.pi[shift+4] = I_link[0,0] 
             self.beliefPi[shift+4] = max(0, self.pi[shift+4] + np.random.normal(piShift_mean,piShift_stdev,1))
 
-            self.pi[shift+5] = 0
+            self.pi[shift+5] = I_link[0,1] 
             self.beliefPi[shift+5] = self.pi[shift+5] + np.random.normal(piShift_mean,piShift_stdev,1)
 
-            self.pi[shift+6] = 0
+            self.pi[shift+6] = I_link[0,2] 
             self.beliefPi[shift+6] = self.pi[shift+6] + np.random.normal(piShift_mean,piShift_stdev,1)
 
             self.pi[shift+7] = I_link[1,1]
             self.beliefPi[shift+7] = max(0,self.pi[shift+7] + np.random.normal(piShift_mean,piShift_stdev,1))
 
-            self.pi[shift+8] = 0
+            self.pi[shift+8] = I_link[1,2] 
             self.beliefPi[shift+8] = max(0,self.pi[shift+8] + np.random.normal(piShift_mean,piShift_stdev,1))
 
             self.pi[shift+9] = I_link[2,2]
             self.beliefPi[shift+9] = max(0,self.pi[shift+9] + np.random.normal(piShift_mean,piShift_stdev,1))
             Profiler.stop()
-        dynamicModel.setDynamics(robot, self.beliefPi) # TODO: update at every cycle
+
+        dynamicModel.Y = dynamicModel.Y.xreplace(d)
+        #dynamicModel.setDynamics(robot, self.beliefPi) # TODO: update at every cycle
         Profiler.print()
         
 
@@ -248,7 +252,7 @@ class Adaptive_FFW(AdaptiveControl):
         actualY = self.dynamicModel.evaluateY(q_d, qd_d, qd_d, qdd_d)
 
         torque = np.matmul(self.kp,e) + np.matmul(self.kd,ed) + np.matmul(actualY, self.beliefPi).astype(np.float64)
-        
+
         bound = 700
         torque = np.clip(torque, -bound, bound)
 
@@ -257,8 +261,8 @@ class Adaptive_FFW(AdaptiveControl):
         sat_e = np.array([sat(el) for el in e], dtype=np.float64)
         deltaPi = gainMatrix @ (actualY.T @ (sat_e+ed))
         self.beliefPi = self.beliefPi + deltaPi
-
         Profiler.stop()
+        
         print("Feedback loop took {:.2f} s\nCurrent Error: {:.2f}".format(Profiler.logger["feedback loop"], np.linalg.norm(e)))
         
         # Trajectory logging
@@ -269,11 +273,12 @@ class Adaptive_FFW(AdaptiveControl):
 if __name__ == "__main__":
     
     #robot and environment creation
+    robot = TwoLink()
     #robot = ThreeLink()
-    robot = models.DH.Puma560()
+    #robot = models.DH.Puma560()
 
     env = PyPlot()
-    goal = [pi/2,-pi/2,0,pi/2,pi/4,-pi/4]
+    goal = [pi/2,pi/2]
 
     T = 3
     traj = ClippedTrajectory(robot.q, goal, T)
@@ -288,7 +293,7 @@ if __name__ == "__main__":
     
     
     loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [600,500,400,300,300,250], kd = [130,130,130,110,80,60]) #3R
+    loop.setK(kp = [200,80], kd = [50,20]) #3R
     # loop.setK(kp=) #Panda
     
     loop.simulate(dt = 0.01)

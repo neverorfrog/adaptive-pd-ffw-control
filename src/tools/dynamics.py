@@ -239,34 +239,23 @@ class EulerLagrange():
         return inertia.evalf()      
 
     def evaluateMatrix(self, mat, q, qd, qd_S, qdd):
-        actualMatrix = mat
         q_sym = sym.symbol(f"q(1:{self.n+1})")  # link variables
         qd_sym = sym.symbol(f"q_dot_(1:{self.n+1})")
         qdd_sym = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
         qd_S_sym = sym.symbol(f"q_dot_S_(1:{self.n+1})")
 
+        d = dict()
+
         for i in range(self.n):
-            actualMatrix = actualMatrix.subs(q_sym[i], q[i])
-            actualMatrix = actualMatrix.subs(qd_sym[i], qd[i])
-            actualMatrix = actualMatrix.subs(qd_S_sym[i], qd_S[i])
-            actualMatrix = actualMatrix.subs(qdd_sym[i], qdd[i])
+            d[q_sym[i]] = q[i]
+            d[qd_sym[i]] = qd[i]
+            d[qd_S_sym[i]] = qd_S[i]
+            d[qdd_sym[i]] = qdd[i]
         
-        return actualMatrix
+        return mat.xreplace(d).evalf()
     
     def evaluateY(self, q, qd, qd_S, qdd):
-        actualY = self.Y
-        q_sym = sym.symbol(f"q(1:{self.n+1})")  # link variables
-        qd_sym = sym.symbol(f"q_dot_(1:{self.n+1})")
-        qdd_sym = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
-        qd_S_sym = sym.symbol(f"q_dot_S_(1:{self.n+1})")
-
-        for i in range(self.n):
-            actualY = actualY.subs(q_sym[i], q[i])
-            actualY = actualY.subs(qd_sym[i], qd[i])
-            actualY = actualY.subs(qd_S_sym[i], qd_S[i])
-            actualY = actualY.subs(qdd_sym[i], qdd[i])
-        
-        return actualY
+        return self.evaluateMatrix(self.Y, q, qd, qd_S, qdd)
     
 
 if __name__ == "__main__":
