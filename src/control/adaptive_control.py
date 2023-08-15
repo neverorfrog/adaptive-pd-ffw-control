@@ -1,6 +1,5 @@
 import numpy as np
 from tools.robots import *
-from tools.control import Control
 from roboticstoolbox.backends.PyPlot import PyPlot
 from math import pi
 from roboticstoolbox.tools.trajectory import *
@@ -231,7 +230,6 @@ class Adaptive_FFW(AdaptiveControl):
              
     def feedback(self):
         '''Computes the torque necessary to follow the reference trajectory'''
-        Profiler.start("feedback loop")
         n = len(self.robot.links)
 
         #Current configuration
@@ -246,6 +244,7 @@ class Adaptive_FFW(AdaptiveControl):
         ed = qd_d - qd
         arrived = self.check_termination(e,ed)
 
+        Profiler.start("feedback loop")
         actualY = self.dynamicModel.evaluateY(q_d, qd_d, qd_d, qdd_d)
 
         torque = np.matmul(self.kp,e) + np.matmul(self.kd,ed) + np.matmul(actualY, self.beliefPi).astype(np.float64)
@@ -259,10 +258,11 @@ class Adaptive_FFW(AdaptiveControl):
         deltaPi = gainMatrix @ (actualY.T @ (sat_e+ed))
         self.beliefPi = self.beliefPi + deltaPi
 
+        Profiler.stop()
+        print("Feedback loop took {:.2f} s\nCurrent Error: {:.2f}".format(Profiler.logger["feedback loop"], np.linalg.norm(e)))
+        
         # Trajectory logging
         self.append(q_d,qd_d,qdd_d,torque)
-        Profiler.stop()
-        print("Feedback loop took {:.2f} s".format(Profiler.logger["feedback loop"]))
         
         return torque, arrived
     
@@ -271,14 +271,15 @@ if __name__ == "__main__":
     #robot and environment creation
     #robot = ThreeLink()
     robot = models.DH.Puma560()
+
     env = PyPlot()
-    goal = [pi,-pi/2,0,-pi/2,pi/2,-pi/2]
+    goal = [pi/2,-pi/2,0,pi/2,pi/4,-pi/4]
 
     T = 3
     traj = ClippedTrajectory(robot.q, goal, T)
 
-    symrobot = SymbolicPlanarRobot(6)
-    model = EulerLagrange(symrobot)
+    symrobot = SymbolicPlanarRobot(len(robot.links))
+    model = EulerLagrange(symrobot, os.path.join("src/models",robot.name))
     Profiler.print()
         
     # loop = Adaptive_Facile(robot, env, model, [0,-9.81,0])
@@ -287,7 +288,7 @@ if __name__ == "__main__":
     
     
     loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp = [300,300,300,300,300,150], kd = [90,90,90,90,90,60]) #3R
+    loop.setK(kp = [600,500,400,300,300,250], kd = [130,130,130,110,80,60]) #3R
     # loop.setK(kp=) #Panda
     
     loop.simulate(dt = 0.01)

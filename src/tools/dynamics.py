@@ -3,17 +3,33 @@ import spatialmath.base.symbolic as sym
 import sympy
 from tools.utils import skew, index2var, coeff_dict, Profiler, efficient_coeff_dict
 from tools.robots import *
+import os
 class EulerLagrange():
 
-    def __init__(self, robot):
+    def __init__(self, robot, path = None):
         '''
         realrobot for kinematic parameters
         pi for dynamic parameters that we believe are ground truth
         '''
         self.robot = robot
-        self.n = len(robot.links); n = self.n
+        self.n = len(robot.links)
+
+        self.pi = sym.symbol(f"pi_(1:{10*self.n+1})")
+        self.path = path
+        
+        if path and os.path.isdir(path):
+            print("Dynamic model cache found. Loading model...")
+            self.M = np.load(open(os.path.join(path,"M.npy"),"rb"), allow_pickle=True)
+            self.S = np.load(open(os.path.join(path,"S.npy"),"rb"), allow_pickle=True)
+            self.g = np.load(open(os.path.join(path,"g.npy"),"rb"), allow_pickle=True)
+            self.Y = sympy.Matrix(np.load(open(os.path.join(path,"Y.npy"),"rb"), allow_pickle=True))
+        else:
+            self.init()
+        
+    def init(self):
         self.Y = None
         self.dynamicModel = None
+        n = self.n
         
         #kinematic parameters
         q = sym.symbol(f"q(1:{n+1})")  # link variables
@@ -24,7 +40,7 @@ class EulerLagrange():
 
         #Kinetic and Potential energy
         Profiler.start("Moving Frames")
-        T,U = self.movingFrames(robot)
+        T,U = self.movingFrames(self.robot)
         Profiler.stop()
         
         #Inertia Matrix
@@ -55,7 +71,14 @@ class EulerLagrange():
         self.Y = symModel.jacobian(self.pi)
         Profiler.stop()
 
-        
+        if(self.path):
+            os.mkdir(self.path)
+            np.save(open(os.path.join(self.path,"M.npy"), "wb"), self.M)
+            np.save(open(os.path.join(self.path,"S.npy"), "wb"), self.S)
+            np.save(open(os.path.join(self.path,"g.npy"), "wb"), self.g)
+            np.save(open(os.path.join(self.path,"Y.npy"), "wb"), self.Y)
+
+
         
     def setDynamics(self, realrobot, pi):
         self.realrobot = realrobot
