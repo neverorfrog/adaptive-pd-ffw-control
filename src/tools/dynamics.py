@@ -4,6 +4,9 @@ import sympy
 from tools.utils import skew, index2var, coeff_dict, Profiler, efficient_coeff_dict
 from tools.robots import *
 import os
+from sympy import poly, collect
+import itertools
+
 class EulerLagrange():
 
     def __init__(self, robot, path = None):
@@ -45,18 +48,22 @@ class EulerLagrange():
         
         #Inertia Matrix
         Profiler.start("Inertia Matrix")
-
-        coeffs = efficient_coeff_dict(T, q_d)
-        
+        terms = sympy.Poly(T,q_d).coeffs()
         self.M = np.full((n,n), sym.zero(), dtype = object)
-        for row in range(n):
-            self.M[row,:] = [coeffs[index2var(row,column,q_d)] for column in range(n)]
+        vars = [np.prod(var) for var in itertools.product(*np.repeat([q_d],2,axis=0))] 
+        offset = 0
+        for row in range(n): 
+            offset += row 
+            for column in range(row*(n + 1), n*(row + 1)):
+                mij =  terms[column - offset].coeff(vars[column])
+                self.M[row, column - row*n] = mij
+                self.M[column-row*n, row] = mij
         self.M = (np.ones((n,n))+np.diag([1]*n))*self.M
         Profiler.stop()
 
         #Coriolis and centrifugal terms and gravity terms
         Profiler.start("Coriolis and centifugal")
-        self.S = np.full((n,), sym.zero(), dtype = object)
+        self.S = np.full((n,n), sym.zero(), dtype = object)
         self.g = np.full((n,), sym.zero(), dtype = object)
         M = sympy.Matrix(self.M)
         for i in range(n):
@@ -78,14 +85,14 @@ class EulerLagrange():
             np.save(open(os.path.join(self.path,"g.npy"), "wb"), self.g)
             np.save(open(os.path.join(self.path,"Y.npy"), "wb"), self.Y)
 
-
         
     def setDynamics(self, realrobot, pi):
         self.realrobot = realrobot
         self.pi = pi
-        self.inertia_generic = self.getM(realrobot, pi)
-        self.coriolis_generic = self.getS(realrobot, pi)
-        self.gravity_generic = self.getG(realrobot, pi)
+        g = self.g.reshape(-1,1)
+        self.inertia_generic = self.evaluateMatrixPi(sympy.Matrix(self.M).as_mutable(), realrobot, pi)
+        self.coriolis_generic = self.evaluateMatrixPi(sympy.Matrix(self.S).as_mutable(), realrobot, pi)
+        self.gravity_generic = self.evaluateMatrixPi(sympy.Matrix(g).as_mutable(), realrobot, pi)
             
             
     def movingFrames(self, robot):
@@ -139,62 +146,25 @@ class EulerLagrange():
     def getY(self, simplify = False):
         return sym.simplify(self.Y) if simplify else self.Y
     
-    def getG(self, robot, pi):
+    def evaluateMatrixPi(self, matrix, robot, pi):
         n = self.n
-        gravity = sympy.Matrix(self.g)
         a = sym.symbol(f"a(1:{n+1})") 
         g0 = sym.symbol("g")
         sympi = sym.symbol(f"pi_(1:{10*n+1})")
-
-        for i in range(n):
-            shift = 10*i
-            gravity = gravity.subs(sympi[shift+0], pi[shift+0])
-            gravity = gravity.subs(sympi[shift+1], pi[shift+1])
-            gravity = gravity.subs(sympi[shift+2], pi[shift+2])
-            gravity = gravity.subs(sympi[shift+3], pi[shift+3])
-            gravity = gravity.subs(a[i], robot.links[i].a)
-        gravity = gravity.subs(g0, -9.81)
-        return gravity
-    
-    def getS(self, robot, pi):
-        n = self.n
-        coriolis = sympy.Array(self.S)
-        a = sym.symbol(f"a(1:{n+1})") 
-        g0 = sym.symbol("g")
-        sympi = sym.symbol(f"pi_(1:{10*n+1})")
-
-        for i in range(n):
-            shift = 10*i
-            coriolis = coriolis.subs(sympi[shift+0], pi[shift+0])
-            coriolis = coriolis.subs(sympi[shift+1], pi[shift+1])
-            coriolis = coriolis.subs(sympi[shift+2], pi[shift+2])
-            coriolis = coriolis.subs(sympi[shift+3], pi[shift+3])
-            coriolis = coriolis.subs(sympi[shift+4], pi[shift+4])
-            coriolis = coriolis.subs(sympi[shift+7], pi[shift+7])
-            coriolis = coriolis.subs(sympi[shift+9], pi[shift+9])
-            coriolis = coriolis.subs(a[i], robot.links[i].a)
-        coriolis = coriolis.subs(g0, -9.81)
-        return coriolis
         
-    def getM(self, robot, pi):
-        n = self.n
-        inertia = sympy.Matrix(self.M)
-        a = sym.symbol(f"a(1:{n+1})") 
-        g0 = sym.symbol("g")
-        sympi = sym.symbol(f"pi_(1:{10*n+1})")
+        d = dict()
 
-        for i in range(n):
+        for i in range(self.n):
             shift = 10*i
-            inertia = inertia.subs(sympi[shift+0], pi[shift+0])
-            inertia = inertia.subs(sympi[shift+1], pi[shift+1])
-            inertia = inertia.subs(sympi[shift+2], pi[shift+2])
-            inertia = inertia.subs(sympi[shift+3], pi[shift+3])
-            inertia = inertia.subs(sympi[shift+4], pi[shift+4])
-            inertia = inertia.subs(sympi[shift+7], pi[shift+7])
-            inertia = inertia.subs(sympi[shift+9], pi[shift+9])
-            inertia = inertia.subs(a[i], robot.links[i].a)
-        inertia = inertia.subs(g0, -9.81)
-        return inertia
+            d[sympi[shift+0]] = pi[shift+0]
+            d[sympi[shift+1]] = pi[shift+1]
+            d[sympi[shift+2]] = pi[shift+2]
+            d[sympi[shift+3]] = pi[shift+3]
+            d[sympi[shift+4]] = pi[shift+0]
+            d[sympi[shift+7]] = pi[shift+1]
+            d[sympi[shift+9]] = pi[shift+2]
+            
+        return matrix.xreplace(d).evalf()
     
     def getChristoffel(self,k,robot,pi):
         n = self.n
@@ -261,5 +231,4 @@ class EulerLagrange():
 if __name__ == "__main__":
     symrobot = SymbolicPlanarRobot(2)
     model = EulerLagrange(symrobot)
-            
     

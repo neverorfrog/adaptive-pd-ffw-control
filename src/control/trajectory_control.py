@@ -114,9 +114,9 @@ if __name__ == "__main__":
     n = 2
     robot = TwoLink()
     env = PyPlot()
-    goal = [pi/2,pi/2]
+    goal = [pi/6,pi/6]
     
-    T = 3
+    T = 1
     traj = ClippedTrajectory(robot.q, goal, T)
     
     loop = Feedforward(robot, env, [0,-9.81,0])

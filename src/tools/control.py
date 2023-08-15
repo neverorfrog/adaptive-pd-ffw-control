@@ -84,8 +84,9 @@ class Control():
                 
                 
     def plot(self):        
-        fig, axs = plt.subplots(self.robot.n, 4, sharey = True, sharex = True)# a figure with a nx3 grid of Axes
-        
+        fig, axs = plt.subplots(self.robot.n, 3, sharey=True, sharex = True)# a figure with a nx3 grid of Axes
+        fig2, axs2 = plt.subplots(self.robot.n, 3, sharey=False, sharex = True)
+                
         q = np.array(self.q)
         qd = np.array(self.qd)
         qdd = np.array(self.qdd)
@@ -93,13 +94,17 @@ class Control():
         qd_d = np.array(self.qd_d)
         qdd_d = np.array(self.qdd_d)
         e = np.abs(np.subtract(q_d,q))
+        ed = np.abs(np.subtract(qd_d,qd))
         u = np.array(self.u)
         
         fig.suptitle("Joint data in function of time")
         axs[0,0].set_title("q")
         axs[0,1].set_title("q_dot")
         axs[0,2].set_title("q_dot_dot")
-        axs[0,3].set_title("u")
+        
+        axs2[0,0].set_title("u")
+        axs2[0,1].set_title("error on q")
+        axs2[0,2].set_title("error q_dot")
         
         for i in range(self.robot.n):
             axs[i,0].set_ylabel(f"joint {i+1}")
@@ -111,8 +116,10 @@ class Control():
             axs[i,1].plot(self.t, qd_d[:,i], lw = 2, color = "blue")
             axs[i,2].plot(self.t, qdd_d[:,i], lw = 2, color = "blue")
             
-            axu = fig.add_subplot(self.robot.n,4, 4 + i*4)
-            axu.plot(self.t, u[:,i], lw = 2, color = "green")
+            axs2[i,0].plot(self.t, u[:,i], lw = 2, color = "green")            
+            axs2[i,1].plot(self.t, e[:,i], lw = 2, color = "black")
+            axs2[i,2].plot(self.t, ed[:,i], lw = 2, color = "black")
+            
         plt.show(block = True) 
           
         
