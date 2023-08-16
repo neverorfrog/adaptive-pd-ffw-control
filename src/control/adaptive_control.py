@@ -1,6 +1,5 @@
 import numpy as np
 from tools.robots import *
-from roboticstoolbox.backends.PyPlot import PyPlot
 from math import pi
 from roboticstoolbox.tools.trajectory import *
 from tools.utils import *
@@ -73,7 +72,7 @@ class AdaptiveControl(TrajectoryControl):
             Profiler.stop()
 
         dynamicModel.Y = dynamicModel.Y.xreplace(d)
-        self.dynamicModel.setDynamics(robot, self.beliefPi)
+        self.dynamicModel.setDynamicsParametrized(self.beliefPi)
         Profiler.print()
         
 
@@ -128,8 +127,8 @@ class Adaptive_FFW(AdaptiveControl):
 
         n = len(self.robot.links)
 
-        M = sympy.Matrix(self.dynamicModel.inertia_generic)
-        g = sympy.Matrix(self.dynamicModel.gravity_generic)        
+        M = sympy.Matrix(self.dynamicModel.inertia_parametrized)
+        g = sympy.Matrix(self.dynamicModel.gravity_parametrized)        
 
         q = sym.symbol(f"q(1:{n+1})")  # link variables
         candidates = [0, pi/2, pi, 3/2*pi]
@@ -256,35 +255,32 @@ class Adaptive_FFW(AdaptiveControl):
         # Update rule
         gainMatrix = np.eye(n*10) * 0.1 # TODO: make this a parameter
         sat_e = np.array([sat(el) for el in e], dtype=np.float64)
-        deltaPi = gainMatrix @ (actualY.T @ (sat_e+ed))
+        deltaPi = gainMatrix @ (actualY.T @ (sat_e + ed))
         self.beliefPi = self.beliefPi + deltaPi
         Profiler.stop()
         
-        print("Feedback loop took {:.2f} s\nCurrent Error: {:.2f}".format(Profiler.logger["feedback loop"], np.linalg.norm(e)))        
+        # print("Feedback loop took {:.2f} s\nCurrent Error: {:.2f}".format(Profiler.logger["feedback loop"], np.linalg.norm(e)))        
         
         # Trajectory logging
         self.append(q_d,qd_d,qdd_d,torque)
         
         #Dynamic update(optional)
-        self.dynamicModel.setDynamics(robot, self.beliefPi)
-                
-        print(f"u: {torque}")
+        self.dynamicModel.setDynamicsParametrized(self.beliefPi)                
                                 
         return torque, arrived
     
 if __name__ == "__main__":
     
-    robot = ThreeLink()
-    # robot = models.DH.Puma560()
+    # robot = Polar2R()
+    robot = models.DH.Puma560()
 
-    symrobot = SymbolicPlanarRobot(len(robot.links))
-    # model = EulerLagrange(symrobot, os.path.join("src/models",robot.name), planar = True)
-    model = EulerLagrange(symrobot, planar = True)
+    model = EulerLagrange(robot, os.path.join("src/models",robot.name))
+    # model = EulerLagrange(robot)
     Profiler.print()
         
-    traj = ClippedTrajectory(robot.q, [pi/2,pi/2], 3)
-    loop = Adaptive_FFW(robot, PyPlot(), model, [0,-9.81,0], stdev = 0, plotting = True)
-    loop.setR(reference = traj, threshold = 0.05)
-    loop.setK(kp= [200,80], kd = [50, 20]) 
-    loop.simulate(dt = 0.01)
-    loop.plot()
+    # traj = ClippedTrajectory([0 , -pi/3], [pi/2,pi/3], 6)
+    # loop = Adaptive_FFW(robot, PyPlot(), model, [0,0,-9.81], stdev = 10, plotting = True)
+    # loop.setR(reference = traj, threshold = 0.05)
+    # loop.setK(kp= [200,80], kd = [50, 20]) 
+    # loop.simulate(dt = 0.01)
+    # loop.plot()

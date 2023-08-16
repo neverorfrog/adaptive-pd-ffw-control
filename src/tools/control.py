@@ -83,8 +83,8 @@ class Control():
                 
                 
     def plot(self):        
-        fig, axs = plt.subplots(self.robot.n, 3, sharey=True, sharex = True)# a figure with a nx3 grid of Axes
-        fig2, axs2 = plt.subplots(self.robot.n, 3, sharey=False, sharex = True)
+        fig, axs = plt.subplots(self.robot.n, 3, sharey="col", sharex = True)# a figure with a nx3 grid of Axes
+        fig2, axs2 = plt.subplots(self.robot.n, 3, sharey="col", sharex = True)
                 
         q = np.array(self.q)
         qd = np.array(self.qd)
