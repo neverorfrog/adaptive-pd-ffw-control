@@ -159,7 +159,7 @@ class ThreeLink(DHRobot):
 
         links = [link1, link2, link3]
 
-        super().__init__(links, name="3R", keywords=("planar",), symbolic = symbolic)
+        super().__init__(links, name="Planar 3R", keywords=("planar",), symbolic = symbolic)
     
     def jacob0(self, q=None, T=None, half=None, start=None, end=None):
         J = DHRobot.jacob0(self,q)

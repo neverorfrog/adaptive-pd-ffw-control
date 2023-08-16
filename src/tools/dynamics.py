@@ -1,24 +1,23 @@
 import numpy as np
 import spatialmath.base.symbolic as sym
 import sympy
-from tools.utils import skew, index2var, coeff_dict, Profiler, efficient_coeff_dict
+from tools.utils import skew, Profiler, efficient_coeff_dict, index2var
 from tools.robots import *
 import os
-from sympy import poly, collect
 import itertools
 
 class EulerLagrange():
 
-    def __init__(self, robot, path = None):
+    def __init__(self, robot, path = None, planar = False):
         '''
         realrobot for kinematic parameters
         pi for dynamic parameters that we believe are ground truth
         '''
         self.robot = robot
         self.n = len(robot.links)
-
         self.pi = sym.symbol(f"pi_(1:{10*self.n+1})")
         self.path = path
+        self.planar = planar
         
         if path and os.path.isdir(path):
             print("Dynamic model cache found. Loading model...")
@@ -48,21 +47,19 @@ class EulerLagrange():
         
         #Inertia Matrix
         Profiler.start("Inertia Matrix")
-        terms = sympy.Poly(T,q_d).coeffs()
-        self.M = np.full((n,n), sym.zero(), dtype = object)
-        vars = [np.prod(var) for var in itertools.product(*np.repeat([q_d],2,axis=0))] 
-        offset = 0
-        for row in range(n): 
-            offset += row 
-            for column in range(row*(n + 1), n*(row + 1)):
-                mij =  terms[column - offset].coeff(vars[column])
-                self.M[row, column - row*n] = mij
-                self.M[column-row*n, row] = mij
-        self.M = (np.ones((n,n))+np.diag([1]*n))*self.M
+        self.M = self.computeInertia(T, q_d)
         Profiler.stop()
-
+        
+        # Profiler.start("Inertia Matrix")
+        # coeffs = efficient_coeff_dict(T, q_d)
+        # self.M = np.full((n,n), sym.zero(), dtype = object)
+        # for row in range(n):
+        #     self.M[row,:] = [coeffs[index2var(row,column,q_d)] for column in range(n)]
+        # self.M = (np.ones((n,n))+np.diag([1]*n))*self.M
+        # Profiler.stop()
+        
         #Coriolis and centrifugal terms and gravity terms
-        Profiler.start("Coriolis and centifugal")
+        Profiler.start("Coriolis and centrifugal")
         self.S = np.full((n,n), sym.zero(), dtype = object)
         self.g = np.full((n,), sym.zero(), dtype = object)
         M = sympy.Matrix(self.M)
@@ -85,11 +82,24 @@ class EulerLagrange():
             np.save(open(os.path.join(self.path,"g.npy"), "wb"), self.g)
             np.save(open(os.path.join(self.path,"Y.npy"), "wb"), self.Y)
 
-        
+    def computeInertia(self, T, q_d):
+        n = self.n
+        terms = sympy.Poly(T,q_d).coeffs()
+        M = np.full((n,n), sym.zero())
+        offset = 0
+        for row in range(n): 
+            offset += row 
+            for column in range(row*(n + 1), n*(row + 1)):
+                mij =  terms[column - offset]
+                M[row, column - row*n] = mij
+                M[column-row*n, row] += mij
+        return M
+    
     def setDynamics(self, realrobot, pi):
         self.realrobot = realrobot
         self.pi = pi
         g = self.g.reshape(-1,1)
+                        
         self.inertia_generic = self.evaluateMatrixPi(sympy.Matrix(self.M).as_mutable(), realrobot, pi)
         self.coriolis_generic = self.evaluateMatrixPi(sympy.Matrix(self.S).as_mutable(), realrobot, pi)
         self.gravity_generic = self.evaluateMatrixPi(sympy.Matrix(g).as_mutable(), realrobot, pi)
@@ -98,7 +108,7 @@ class EulerLagrange():
     def movingFrames(self, robot):
         n = self.n
         g0 = sym.symbol("g")
-        gv = np.array([0, -g0, 0]) 
+        gv = np.array([0, -g0, 0]) if self.planar else np.array([0, 0, -g0])
         ri = np.full((3,), sym.zero(), dtype = object) #vector from RF i-1 to i wrt RF i-1
         Rinv = np.full((3,3), sym.zero(), dtype = object) #ith matrix representing rotation from Rf i to Rf i-1
         iwi = np.full((3,), sym.zero(), dtype = object) #angular velocity of link i wrt RF i
@@ -160,9 +170,9 @@ class EulerLagrange():
             d[sympi[shift+1]] = pi[shift+1]
             d[sympi[shift+2]] = pi[shift+2]
             d[sympi[shift+3]] = pi[shift+3]
-            d[sympi[shift+4]] = pi[shift+0]
-            d[sympi[shift+7]] = pi[shift+1]
-            d[sympi[shift+9]] = pi[shift+2]
+            d[sympi[shift+4]] = pi[shift+4]
+            d[sympi[shift+7]] = pi[shift+7]
+            d[sympi[shift+9]] = pi[shift+9]
             
         return matrix.xreplace(d).evalf()
     
@@ -203,10 +213,15 @@ class EulerLagrange():
         assert(self.realrobot is not None)
         n = len(self.realrobot.links)
         q_sym = sym.symbol(f"q(1:{n+1})")  # link variable
+        a = sym.symbol(f"a(1:{n+1})") 
         inertia = self.inertia_generic
-        for i in range(n):
-            inertia = inertia.subs(q_sym[i], q[i])
-        return inertia.evalf()      
+        d = dict()
+
+        for i in range(self.n):
+            d[q_sym[i]] = q[i]
+            d[a[i]] = self.realrobot.links[i].a
+        
+        return inertia.xreplace(d).evalf()    
 
     def evaluateMatrix(self, mat, q, qd, qd_S, qdd):
         q_sym = sym.symbol(f"q(1:{self.n+1})")  # link variables

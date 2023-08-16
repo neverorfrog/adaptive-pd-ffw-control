@@ -9,7 +9,7 @@ from tools.dynamics import *
 import itertools
 
 class AdaptiveControl(TrajectoryControl):
-    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0], plotting = True):
+    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0], stdev = None, plotting = True):
         super().__init__(robot, env, gravity, plotting)
         self.dynamicModel = dynamicModel
 
@@ -28,9 +28,8 @@ class AdaptiveControl(TrajectoryControl):
         d[g0_sym] = gravity[gravIdx]
 
         Profiler.stop()
-        piShift_stdev = 20
+        piShift_stdev = 20 if stdev is None else stdev
         piShift_mean = 0
-
 
         for i in range(n):
             Profiler.start(f"subs {i} stage")
@@ -74,14 +73,14 @@ class AdaptiveControl(TrajectoryControl):
             Profiler.stop()
 
         dynamicModel.Y = dynamicModel.Y.xreplace(d)
-        dynamicModel.setDynamics(robot, self.beliefPi) # TODO: update at every cycle
+        self.dynamicModel.setDynamics(robot, self.beliefPi)
         Profiler.print()
         
 
 class Adaptive_Facile(AdaptiveControl):
     
-    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0], plotting = True):
-        super().__init__(robot, env, dynamicModel, gravity, plotting)
+    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0], stdev = None, plotting = True):
+        super().__init__(robot, env, dynamicModel, gravity, stdev, plotting)
         
     def feedback(self):
         
@@ -105,7 +104,7 @@ class Adaptive_Facile(AdaptiveControl):
         Y = self.dynamicModel.evaluateY(q_d, qd_d, qd_r, qdd_r)
         gainMatrix = np.eye(n*10) * 0.01 # TODO: make this a parameter
         deltaPi = (gainMatrix @ Y.T) @ ed_r
-        self.beliefPi = self.beliefPi + deltaPi
+        # self.beliefPi = self.beliefPi + deltaPi
         
         #Torque computation        
         torque = np.matmul(self.kp,e) + np.matmul(self.kd,ed) + np.matmul(Y, self.beliefPi).astype(np.float64) # TODO CAMBIAAA
@@ -122,8 +121,8 @@ class Adaptive_Facile(AdaptiveControl):
 
 class Adaptive_FFW(AdaptiveControl):
 
-    def __init__(self, robot = None, env = None, dynamicModel: EulerLagrange = None, gravity = [0,0,0], plotting = True):
-        super().__init__(robot, env, dynamicModel, gravity, plotting)
+    def __init__(self, robot = None, env = None, dynamicModel: EulerLagrange = None, gravity = [0,0,0], stdev = None, plotting = True):
+        super().__init__(robot, env, dynamicModel, gravity, stdev, plotting)
 
     def checkGains(self, q_d, qd_d, qdd_d):
 
@@ -261,37 +260,31 @@ class Adaptive_FFW(AdaptiveControl):
         self.beliefPi = self.beliefPi + deltaPi
         Profiler.stop()
         
-        print("Feedback loop took {:.2f} s\nCurrent Error: {:.2f}".format(Profiler.logger["feedback loop"], np.linalg.norm(e)))
+        print("Feedback loop took {:.2f} s\nCurrent Error: {:.2f}".format(Profiler.logger["feedback loop"], np.linalg.norm(e)))        
         
         # Trajectory logging
         self.append(q_d,qd_d,qdd_d,torque)
         
+        #Dynamic update(optional)
+        self.dynamicModel.setDynamics(robot, self.beliefPi)
+                
+        print(f"u: {torque}")
+                                
         return torque, arrived
     
 if __name__ == "__main__":
     
-    #robot and environment creation
-    robot = TwoLink()
+    robot = ThreeLink()
     # robot = models.DH.Puma560()
 
-    env = PyPlot()
-    goal = [pi/2,pi/2]
-
-    T = 2
-    traj = ClippedTrajectory([0,-pi/2], goal, T)
-
     symrobot = SymbolicPlanarRobot(len(robot.links))
-    # model = EulerLagrange(symrobot, os.path.join("src/models",robot.name))
-    model = EulerLagrange(symrobot)
+    # model = EulerLagrange(symrobot, os.path.join("src/models",robot.name), planar = True)
+    model = EulerLagrange(symrobot, planar = True)
     Profiler.print()
         
-    # loop = Adaptive_Facile(robot, env, model, [0,-9.81,0])
-    # loop = Adaptive_FFW(robot, env, model, [0,0,-9.81], plotting = True) #3D
-    loop = Adaptive_FFW(robot, env, model, [0,-9.81,0], plotting = True) #planar
-    
-    
-    loop.setR(reference = traj, goal = goal, threshold = 0.05)
-    loop.setK(kp= [200,120], kd = [50, 30]) 
-    
+    traj = ClippedTrajectory(robot.q, [pi/2,pi/2], 3)
+    loop = Adaptive_FFW(robot, PyPlot(), model, [0,-9.81,0], stdev = 0, plotting = True)
+    loop.setR(reference = traj, threshold = 0.05)
+    loop.setK(kp= [200,80], kd = [50, 20]) 
     loop.simulate(dt = 0.01)
     loop.plot()

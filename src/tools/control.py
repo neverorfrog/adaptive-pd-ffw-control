@@ -37,7 +37,7 @@ class Control():
     def feedback(self) -> Tuple[np.ndarray, bool]:
         return np.random.rand(self.robot.n)
     
-    def setR(self, reference = None, goal = None, threshold = 0.01):
+    def setR(self, reference = None, threshold = 0.01):
         if reference is not None:
             self.reference = reference
             q_d, qd_d, qdd_d = reference(self.robot.n, 0)
@@ -46,8 +46,7 @@ class Control():
             self.qdd_d = [qdd_d]
 
         self.threshold = threshold
-        if goal is not None:
-            self.goal = goal
+        self.goal = reference.goal
             
     def setK(self, kp = None, kd = None):
         if kp is not None:
