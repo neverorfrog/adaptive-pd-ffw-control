@@ -74,8 +74,6 @@ class AdaptiveControl(TrajectoryControl):
             Profiler.stop()
 
         dynamicModel.Y = dynamicModel.Y.xreplace(d)
-        #dynamicModel.setDynamics(robot, self.beliefPi) # TODO: update at every cycle
-        Profiler.print()
         
 
 class Adaptive_Facile(AdaptiveControl):
@@ -239,6 +237,7 @@ class Adaptive_FFW(AdaptiveControl):
         #Current configuration
         q = self.robot.q
         qd = self.robot.qd
+        qdd = self.robot.qdd
 
         #Reference Configuration
         q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
@@ -255,6 +254,16 @@ class Adaptive_FFW(AdaptiveControl):
 
         bound = 700
         torque = np.clip(torque, -bound, bound)
+
+        print(self.dynamicModel.evaluateMatrix(self.dynamicModel.getM(self.robot, self.pi), q_d, qd_d, qd_d, qdd_d))
+
+        #print(np.matmul(actualY, self.pi).astype(np.float64))
+
+        
+        print( self.robot.inertia(q_d))
+
+        exit(0)
+
 
         # Update rule
         gainMatrix = np.eye(n*10) * 0.1 # TODO: make this a parameter
