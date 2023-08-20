@@ -1,4 +1,5 @@
 import numpy as np
+from roboticstoolbox.backends.PyPlot import PyPlot
 from tools.robots import *
 from math import pi
 from roboticstoolbox.tools.trajectory import *
@@ -6,129 +7,25 @@ from tools.utils import *
 from control.trajectory_control import TrajectoryControl
 from tools.dynamics import *
 import itertools
+from sympy import trigsimp
 
 class AdaptiveControl(TrajectoryControl):
-    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0], stdev = None, plotting = True):
-        super().__init__(robot, env, gravity, plotting)
+    def __init__(self, robot = None, env = None, dynamicModel = None, plotting = True):
+        super().__init__(robot, env, model, plotting)
         self.dynamicModel = dynamicModel
-
-        n = len(self.robot.links)
-        a_sym = sym.symbol(f"a(1:{n+1})")
-        g0_sym = sym.symbol("g")
-
-        self.pi_sym = sym.symbol(f"pi_(1:{10*n+1})")
-        self.pi = np.zeros(10*n)
-        self.beliefPi = np.zeros(10*n)
-
-        Profiler.start("Y gravity substitution")
-        dynamicModel.getY()
-        gravIdx = np.nonzero(gravity)[0][0]
-        d = dict()
-        d[g0_sym] = gravity[gravIdx]
-
-        Profiler.stop()
-        piShift_stdev = 20 if stdev is None else stdev
-        piShift_mean = 0
-
-        for i in range(n):
-            Profiler.start(f"subs {i} stage")
-
-            shift = 10*i
-            d[a_sym[i]] = self.robot.links[i].a
-
-            I_link = self.robot.links[i].I + self.robot.links[i].m*np.matmul(skew(self.robot.links[i].r).T, skew(self.robot.links[i].r))
-            mr = self.robot.links[i].m*self.robot.links[i].r 
-
-            #Computation of actual dynamic parameters
-            self.pi[shift+0] = self.robot.links[i].m 
-            self.beliefPi[shift+0] = max(0, self.pi[shift+0] + np.random.normal(piShift_mean,piShift_stdev,1))
-
-            self.pi[shift+1] = mr[0]
-            self.beliefPi[shift+1] = self.pi[shift+1] + np.random.normal(piShift_mean,piShift_stdev,1)
-
-            self.pi[shift+2] = mr[1]
-            self.beliefPi[shift+2] = self.pi[shift+2] + np.random.normal(piShift_mean,piShift_stdev,1)
-
-            self.pi[shift+3] = mr[2]
-            self.beliefPi[shift+3] = self.pi[shift+3] + np.random.normal(piShift_mean,piShift_stdev,1)
-
-            self.pi[shift+4] = I_link[0,0] 
-            self.beliefPi[shift+4] = max(0, self.pi[shift+4] + np.random.normal(piShift_mean,piShift_stdev,1))
-
-            self.pi[shift+5] = I_link[0,1] 
-            self.beliefPi[shift+5] = self.pi[shift+5] + np.random.normal(piShift_mean,piShift_stdev,1)
-
-            self.pi[shift+6] = I_link[0,2] 
-            self.beliefPi[shift+6] = self.pi[shift+6] + np.random.normal(piShift_mean,piShift_stdev,1)
-
-            self.pi[shift+7] = I_link[1,1]
-            self.beliefPi[shift+7] = max(0,self.pi[shift+7] + np.random.normal(piShift_mean,piShift_stdev,1))
-
-            self.pi[shift+8] = I_link[1,2] 
-            self.beliefPi[shift+8] = max(0,self.pi[shift+8] + np.random.normal(piShift_mean,piShift_stdev,1))
-
-            self.pi[shift+9] = I_link[2,2]
-            self.beliefPi[shift+9] = max(0,self.pi[shift+9] + np.random.normal(piShift_mean,piShift_stdev,1))
-            Profiler.stop()
-
-        dynamicModel.Y = dynamicModel.Y.xreplace(d)
-        self.dynamicModel.setDynamicsParametrized(self.beliefPi)
-        Profiler.print()
-        
-
-class Adaptive_Facile(AdaptiveControl):
-    
-    def __init__(self, robot = None, env = None, dynamicModel = None, gravity = [0,0,0], stdev = None, plotting = True):
-        super().__init__(robot, env, dynamicModel, gravity, stdev, plotting)
-        
-    def feedback(self):
-        
-        n = len(self.robot.links)
-        q = self.robot.q
-        qd = self.robot.qd
-        
-        #Reference Configuration and error
-        q_d, qd_d, qdd_d = self.reference(self.robot.n, self.t[-1])
-        gainMatrix = np.linalg.inv(self.kd) @ self.kp    
-        
-        #Error     
-        e = q_d - q
-        ed = qd_d - qd
-        qd_r = qd_d + gainMatrix @ e
-        ed_r = qd_r - qd #modified velocity error
-        qdd_r = qdd_d + gainMatrix @ ed
-        arrived = self.check_termination(e,ed)
-        
-        #Update Law
-        Y = self.dynamicModel.evaluateY(q_d, qd_d, qd_r, qdd_r)
-        gainMatrix = np.eye(n*10) * 0.01 # TODO: make this a parameter
-        deltaPi = (gainMatrix @ Y.T) @ ed_r
-        # self.beliefPi = self.beliefPi + deltaPi
-        
-        #Torque computation        
-        torque = np.matmul(self.kp,e) + np.matmul(self.kd,ed) + np.matmul(Y, self.beliefPi).astype(np.float64) # TODO CAMBIAAA
-        
-        bound = 700
-        torque = np.clip(torque, -bound, bound)
-        
-        # Trajectory logging
-        self.append(q_d,qd_d,qdd_d,torque)
-                
-        print(f"u: {torque}")
-        return torque, arrived
         
 
 class Adaptive_FFW(AdaptiveControl):
 
-    def __init__(self, robot = None, env = None, dynamicModel: EulerLagrange = None, gravity = [0,0,0], stdev = None, plotting = True):
-        super().__init__(robot, env, dynamicModel, gravity, stdev, plotting)
+    def __init__(self, robot = None, env = None, dynamicModel: EulerLagrange = None, plotting = True):
+        super().__init__(robot, env, dynamicModel, plotting)
 
     def checkGains(self, q_d, qd_d, qdd_d):
-
+        
         n = len(self.robot.links)
 
-        M = sympy.Matrix(self.dynamicModel.inertia_parametrized)
-        g = sympy.Matrix(self.dynamicModel.gravity_parametrized)        
+        M = sympy.Matrix(model.inertia_parametrized)
+        g = sympy.Matrix(model.gravity_parametrized)        
 
         q = sym.symbol(f"q(1:{n+1})")  # link variables
         candidates = [0, pi/2, pi, 3/2*pi]
@@ -244,43 +141,42 @@ class Adaptive_FFW(AdaptiveControl):
         ed = qd_d - qd
         arrived = self.check_termination(e,ed)
 
-        Profiler.start("feedback loop")
+        Profiler.start("Y evaluation")
         actualY = self.dynamicModel.evaluateY(q_d, qd_d, qd_d, qdd_d)
+        print(actualY.shape)
+        Profiler.stop()
 
-        torque = np.matmul(self.kp,e) + np.matmul(self.kd,ed) + np.matmul(actualY, self.beliefPi).astype(np.float64)
+        Profiler.start("Feedback loop")
+        torque = np.matmul(self.kp,e) + np.matmul(self.kd,ed) + np.matmul(actualY, self.robot.pi).astype(np.float64)
 
         bound = 700
         torque = np.clip(torque, -bound, bound)
 
         # Update rule
-        gainMatrix = np.eye(n*10) * 0.1 # TODO: make this a parameter
+        gainMatrix = np.eye(len(self.robot.pi)) * 0.1 # TODO: make this a parameter
         sat_e = np.array([sat(el) for el in e], dtype=np.float64)
         deltaPi = gainMatrix @ (actualY.T @ (sat_e + ed))
-        self.beliefPi = self.beliefPi + deltaPi
-        Profiler.stop()
-        
+        self.robot.pi = self.robot.pi + deltaPi
+
         # print("Feedback loop took {:.2f} s\nCurrent Error: {:.2f}".format(Profiler.logger["feedback loop"], np.linalg.norm(e)))        
         
         # Trajectory logging
         self.append(q_d,qd_d,qdd_d,torque)
-        
-        #Dynamic update(optional)
-        self.dynamicModel.setDynamicsParametrized(self.beliefPi)                
+        Profiler.stop()
+        Profiler.print()           
                                 
         return torque, arrived
     
 if __name__ == "__main__":
     
-    # robot = Polar2R()
-    robot = models.DH.Puma560()
-
-    model = EulerLagrange(robot, os.path.join("src/models",robot.name))
-    # model = EulerLagrange(robot)
+    robot = ParametrizedRobot(TwoLink())
+    # model = EulerLagrange(robot, os.path.join("src/models",robot.name), planar = True)
+    model = EulerLagrange(robot, planar = True)
     Profiler.print()
-        
-    # traj = ClippedTrajectory([0 , -pi/3], [pi/2,pi/3], 6)
-    # loop = Adaptive_FFW(robot, PyPlot(), model, [0,0,-9.81], stdev = 10, plotting = True)
-    # loop.setR(reference = traj, threshold = 0.05)
-    # loop.setK(kp= [200,80], kd = [50, 20]) 
-    # loop.simulate(dt = 0.01)
-    # loop.plot()
+            
+    traj = ClippedTrajectory(robot.q, [pi/2,pi/2], 3)
+    loop = Adaptive_FFW(robot, PyPlot(), model, plotting = True)
+    loop.setR(reference = traj, threshold = 0.05)
+    loop.setK(kp= [200,80], kd = [50,20]) 
+    loop.simulate(dt = 0.01)
+    loop.plot()

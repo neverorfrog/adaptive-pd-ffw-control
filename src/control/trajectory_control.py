@@ -13,10 +13,10 @@ import spatialmath.base.symbolic as sym
 
 
 class TrajectoryControl(Control):
-    def __init__(self, robot=None, env=None, gravity=[0,0,0], plotting = True):
+    def __init__(self, robot=None, env=None, model = None, plotting = True):
         super().__init__(robot, env, plotting)
-        self.gravity = gravity
-        self.u = [robot.gravload(self.robot.q, gravity)]
+        self.gravity = [0,9.81,0] if model.planar else [0,0,9.81]
+        self.u = [robot.gravload(self.robot.q, self.gravity)]
         
     def apply(self, torque) -> None:
         #numerical integration (runge kutta 2)

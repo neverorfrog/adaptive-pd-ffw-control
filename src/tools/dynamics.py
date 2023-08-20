@@ -4,7 +4,9 @@ import sympy
 from tools.utils import skew, Profiler, efficient_coeff_dict, index2var
 from tools.robots import *
 import os
-import itertools
+from sympy import trigsimp, expand, nsimplify, evalf
+from math import pi
+from operator import itemgetter
 
 class EulerLagrange():
 
@@ -23,40 +25,57 @@ class EulerLagrange():
             self.M = np.load(open(os.path.join(path,"M.npy"),"rb"), allow_pickle=True)
             self.S = np.load(open(os.path.join(path,"S.npy"),"rb"), allow_pickle=True)
             self.g = np.load(open(os.path.join(path,"g.npy"),"rb"), allow_pickle=True)
+            self.rindices = np.load(open(os.path.join(path,"rindices.npy"),"rb"), allow_pickle=True)
+            self.kindices = np.load(open(os.path.join(path,"kindices.npy"),"rb"), allow_pickle=True)
+            self.p = np.load(open(os.path.join(path,"p.npy"),"rb"), allow_pickle=True)
             self.Y = sympy.Matrix(np.load(open(os.path.join(path,"Y.npy"),"rb"), allow_pickle=True))
+            self.robot.pi = np.delete(self.robot.pi, self.rindices)
+            self.robot.realpi = np.delete(self.robot.realpi, self.rindices) 
         else:
             self.init()
         
     def init(self):
-        self.Y = None
-        self.dynamicModel = None
         n = self.n
         
-        #kinematic parameters
-        q = sym.symbol(f"q(1:{n+1})")  # link variables
+        # link variables
+        q = sym.symbol(f"q(1:{n+1})") 
         q_d = sym.symbol(f"q_dot_(1:{n+1})")
-        
-        #dynamic parameters
-        self.pi = sym.symbol(f"pi_(1:{10*n+1})")
 
         #Kinetic and Potential energy
         Profiler.start("Moving Frames")
         T,U = self.movingFrames(self.robot)
         Profiler.stop()
+        Profiler.print()
         
         #Inertia Matrix
         Profiler.start("Inertia Matrix")
         self.M = self.computeInertia(T, q_d)
         Profiler.stop()
+        Profiler.print()
         
         #Coriolis and centrifugal terms and gravity terms
         Profiler.start("Coriolis and centrifugal")
         self.S, self.g = self.computeCoriolisGravity(self.M, U, q, q_d)
         Profiler.stop()
+        Profiler.print()
         
         Profiler.start("Regressor Matrix")
-        symModel = sympy.Matrix(self.getDynamicsParametrized())
-        self.Y = symModel.jacobian(self.pi)
+        model = sympy.Matrix(self.getDynamics())
+        Y = model.jacobian(self.pi)
+        #minimum number of parameters for each link (in self.p) and eliminating the zero columns
+        self.p = np.zeros((n,), dtype = int) #number of minimal parameters for each link
+        self.kindices = [] #the ones of the columns to keep
+        self.rindices = [] #the ones of the columns to remove
+        for i in range(n*10):
+            if np.array(Y[:,i] == sympy.zeros(n,1)): 
+                self.rindices.append(i)
+            else:
+                linksection = int(i/10)
+                self.p[linksection] += 1
+                self.kindices.append(i)    
+        self.Y = np.delete(Y, self.rindices, 1)
+        self.robot.pi = np.delete(self.robot.pi, self.rindices)
+        self.robot.realpi = np.delete(self.robot.realpi, self.rindices) 
         Profiler.stop()
 
         if(self.path):
@@ -65,17 +84,23 @@ class EulerLagrange():
             np.save(open(os.path.join(self.path,"S.npy"), "wb"), self.S)
             np.save(open(os.path.join(self.path,"g.npy"), "wb"), self.g)
             np.save(open(os.path.join(self.path,"Y.npy"), "wb"), self.Y)
+            np.save(open(os.path.join(self.path,"rindices.npy"), "wb"), self.rindices)
+            np.save(open(os.path.join(self.path,"kindices.npy"), "wb"), self.kindices)
+            np.save(open(os.path.join(self.path,"p.npy"), "wb"), self.p)
             
 
     def computeInertia(self, T, q_d):
         n = self.n
-        terms = sympy.Poly(T,q_d).coeffs()
+        T = sympy.Poly(T.evalf(),q_d).as_dict()
+        print("FINISHED POLY")
         M = np.full((n,n), sym.zero())
-        offset = 0
-        for row in range(n): 
-            offset += row 
+        for row in range(n):
             for column in range(row*(n + 1), n*(row + 1)):
-                mij =  terms[column - offset]
+                key = [0] * n
+                key[row] += 1 
+                key[column - row*n] += 1
+                try: mij = T[tuple(key)]
+                except KeyError: continue
                 M[row, column - row*n] = mij
                 M[column-row*n, row] += mij
         return M
@@ -95,8 +120,7 @@ class EulerLagrange():
                 
     def movingFrames(self, robot):
         n = self.n
-        g0 = sym.symbol("g")
-        gv = np.array([0, -g0, 0]) if self.planar else np.array([0, 0, -g0])
+        gv = np.array([0, -9.81, 0]) if self.planar else np.array([0, 0, -9.81])
         ri = np.full((3,), sym.zero(), dtype = object) #vector from RF i-1 to i wrt RF i-1
         Rinv = np.full((3,3), sym.zero(), dtype = object) #ith matrix representing rotation from Rf i to Rf i-1
         iwi = np.full((3,), sym.zero(), dtype = object) #angular velocity of link i wrt RF i
@@ -112,103 +136,64 @@ class EulerLagrange():
             offset = 10*i
             sigma = int(robot.links[i].isprismatic) #check for prismatic joints
             A = robot[i].A(q[i]) #homogeneus transformation from frame i to i+1            
-            ri = A.t
+            ri = (A.t)
             Ainv = A.inv()
-            Rinv = Ainv.R #rotation from frame i+1 to i
-                            
+            Rinv = (Ainv.R) #rotation from frame i+1 to i
+                                                    
             #Kinetic Energy
             im1wi = iwi + (1-sigma) * q_d[i] * np.array([0,0,1]) #omega of link i wrt RF i-1 (3 x 1) 
-            iwi = Rinv @ im1wi
+            iwi = trigsimp( nsimplify(Rinv @ im1wi, tolerance = 1e-10, rational = True) )
             im1vi = ivi + sigma * q_d[i] * np.array([0,0,1]) + np.cross(im1wi, ri) #linear v of link i wrt RF i-1
-            ivi = Rinv @ im1vi; 
+            ivi = trigsimp(nsimplify(Rinv @ im1vi, tolerance = 1e-10, rational = True))
             mirci = np.array(self.pi[offset+1:offset+4])
-            I_link = np.diag([self.pi[offset+4], self.pi[offset+7], self.pi[offset+9]])
-            Ti = 0.5*self.pi[offset+0]*np.matmul(ivi.T, ivi) + np.matmul(np.matmul(mirci, skew(ivi)), iwi) + 0.5*np.matmul(np.matmul(iwi, I_link), iwi)
-            T = T + Ti
+            I_link = np.array([[self.pi[offset+4], self.pi[offset+5], self.pi[offset+6]],
+                               [self.pi[offset+5], self.pi[offset+7], self.pi[offset+8]],
+                               [self.pi[offset+6], self.pi[offset+8], self.pi[offset+9]]])
             
+            first = 0.5 * self.pi[offset+0] * nsimplify(np.matmul(ivi,ivi).evalf(), tolerance = 1e-10, rational = True)
+            second = nsimplify( np.matmul(np.matmul(mirci, skew(ivi)), iwi).evalf() , tolerance = 1e-10, rational = True)
+            third = 0.5 * np.matmul(np.matmul(iwi, I_link), iwi) 
+            
+            Ti = first + second  + third
+            T = T + Ti
+                   
             #Potential Energy
             rot0i = robot.A(i,q).R #transformation from RF 0 to RF i+1
             r0i = robot.A(i,q).t
             Ui = -self.pi[offset+0]*np.matmul(gv,r0i) - np.matmul(gv, np.matmul(rot0i,mirci))
             U = U + Ui
             
+            print()
+            print(f"FINISHED LINK {i+1}")
+            print()
+            
         return T,U 
     
-    def getDynamicsParametrized(self):
+    def getDynamics(self):
         qdd = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
         qd_S = sym.symbol(f"q_dot_S_(1:{self.n+1})")
         return np.matmul(self.M,qdd) + np.matmul(self.S,qd_S) + self.g
     
     # Return the linear parametrization Y matrix such that Y*pi = tau
     def getY(self, simplify = False):
-        return sym.simplify(self.Y) if simplify else self.Y
+        return sym.simplify(self.Y) if simplify else self.Y  
     
-    def setDynamicsParametrized(self, pi):
-        self.inertia_generic = self.evaluateMatrixPi(sympy.Matrix(self.M).as_mutable(), self.robot, pi)
-        self.coriolis_generic = self.evaluateMatrixPi(sympy.Matrix(self.S).as_mutable(), self.robot, pi)
-        self.gravity_generic = self.evaluateMatrixPi(sympy.Matrix(self.g.reshape(-1,1)).as_mutable(), self.robot, pi)   
-        
-    def setDynamics(self):
-        realrobot = self.robot
-        n = len(realrobot.links)
-        pi = np.zeros(10*n)
-        for i in range(n):
-            shift = 10*i
-            I_link = self.robot.links[i].I + self.robot.links[i].m*np.matmul(skew(self.robot.links[i].r).T, skew(self.robot.links[i].r))
-            mr = self.robot.links[i].m*self.robot.links[i].r 
-            #Computation of actual dynamic parameters
-            pi[shift+0] = self.robot.links[i].m 
-            pi[shift+1] = mr[0]
-            pi[shift+2] = mr[1]
-            pi[shift+3] = mr[2]
-            pi[shift+4] = I_link[0,0] 
-            pi[shift+5] = I_link[0,1] 
-            pi[shift+6] = I_link[0,2] 
-            pi[shift+7] = I_link[1,1]
-            pi[shift+8] = I_link[1,2] 
-            pi[shift+9] = I_link[2,2]
-        self.setDynamicsParametrized(pi)    
-        
-    
-    def evaluateMatrixPi(self, matrix, robot, pi):
+    def evaluateMatrixPi(self, matrix):
         n = self.n
-        a = sym.symbol(f"a(1:{n+1})") 
-        g0 = sym.symbol("g")
-        sympi = sym.symbol(f"pi_(1:{10*n+1})")
-        
+        sympi = sym.symbol(f"pi_(1:{10*n+1})")        
+                         
+        matrix = sympy.Matrix(matrix)
         d = dict()
-
-        for i in range(self.n):
-            shift = 10*i
-            d[sympi[shift+0]] = pi[shift+0]
-            d[sympi[shift+1]] = pi[shift+1]
-            d[sympi[shift+2]] = pi[shift+2]
-            d[sympi[shift+3]] = pi[shift+3]
-            d[sympi[shift+4]] = pi[shift+4]
-            d[sympi[shift+7]] = pi[shift+7]
-            d[sympi[shift+9]] = pi[shift+9]
             
+        for i in range(len(self.robot.pi)):
+            d[sympi[self.kindices[i]]] = self.robot.pi[i]
+                          
         return matrix.xreplace(d).evalf()
-    
-    def getChristoffel(self,k,robot,pi):
-        n = self.n
-        M = sympy.Matrix(self.getM(robot, pi))
-        q = sym.symbol(f"q(1:{n+1})") 
-        c = sympy.Matrix(np.ndarray((n,n)))
-
-        for i in range(M.shape[0]):
-            for j in range(M.shape[1]):
-                first = M[k,j].diff(q[i])
-                second = M[k,i].diff(q[j])
-                third = M[i,j].diff(q[k])
-
-                c[i,j] = first+second-third
-        return 0.5 * c
 
     def gravity(self, q):
         n = len(self.robot.links)
-        q_sym = sym.symbol(f"q(1:{n+1})") 
-        gravity = self.gravity_generic
+        q_sym = sym.symbol(f"q(1:{n+1})")
+        gravity = self.evaluateMatrixPi(self.g)
         d = dict()
         for i in range(self.n):
             d[q_sym[i]] = q[i]
@@ -218,7 +203,7 @@ class EulerLagrange():
         n = len(self.robot.links)
         q_sym = sym.symbol(f"q(1:{n+1})") 
         q_d_sym = sym.symbol(f"q_dot_(1:{n+1})")
-        coriolis = self.coriolis_generic
+        coriolis = self.evaluateMatrixPi(self.S)
         d = dict()
         for i in range(self.n):
             d[q_sym[i]] = q[i]
@@ -228,13 +213,14 @@ class EulerLagrange():
     def inertia(self, q):
         n = len(self.robot.links)
         q_sym = sym.symbol(f"q(1:{n+1})") 
-        inertia = self.inertia_generic
+        inertia = self.evaluateMatrixPi(self.M)
         d = dict()
         for i in range(self.n):
             d[q_sym[i]] = q[i]
         return inertia.xreplace(d).evalf()    
 
     def evaluateMatrix(self, mat, q, qd, qd_S, qdd):
+        mat = sympy.Matrix(mat)
         q_sym = sym.symbol(f"q(1:{self.n+1})") 
         qd_sym = sym.symbol(f"q_dot_(1:{self.n+1})")
         qdd_sym = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
@@ -253,10 +239,30 @@ class EulerLagrange():
     def evaluateY(self, q, qd, qd_S, qdd):
         return self.evaluateMatrix(self.Y, q, qd, qd_S, qdd)
     
+    def getChristoffel(self,k,robot,pi):
+        n = self.n
+        M = sympy.Matrix(self.getM(robot, pi))
+        q = sym.symbol(f"q(1:{n+1})") 
+        c = sympy.Matrix(np.ndarray((n,n)))
+
+        for i in range(M.shape[0]):
+            for j in range(M.shape[1]):
+                first = M[k,j].diff(q[i])
+                second = M[k,i].diff(q[j])
+                third = M[i,j].diff(q[k])
+
+                c[i,j] = first+second-third
+        return 0.5 * c
+    
 
 if __name__ == "__main__":
-    robot = Polar2R()
-    model = EulerLagrange(robot)
-    model.setDynamics()   
-    print(sym.simplify(model.gravity_generic)) 
+    robot = ParametrizedRobot(UR3())
+    model = EulerLagrange(robot, os.path.join("src/models",robot.name))
     
+    q = [1,3,1,1,1,1]
+    
+    me = model.inertia(q)
+    corke = robot.inertia(q)   
+    print()
+    print(f"ERROR MATRIX: {me - corke}")
+    print(f"ERROR NORM: {(me-corke).norm()}")

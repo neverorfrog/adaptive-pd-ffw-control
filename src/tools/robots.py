@@ -2,7 +2,53 @@ from roboticstoolbox import *
 import spatialmath.base.symbolic as sym
 import numpy as np
 import sympy
+from tools.utils import skew
 
+
+class ParametrizedRobot(DHRobot):
+    '''Takes a real robot and parametrizes its dynamic data (adding some noise if needed for adaptive control tests)'''
+    def __init__(self, realrobot, stddev = 1):
+        
+        robot = realrobot
+        n = len(robot.links)
+        self.realrobot = realrobot
+        
+        links = []
+        for i in range(n):
+            links.append(RevoluteDH( 
+                a = robot.links[i].a,
+                alpha = robot.links[i].alpha,
+                d = robot.links[i].d,
+                m = max(0, robot.links[i].m + np.random.normal(0, stddev)),
+                r = robot.links[i].r + np.random.normal(0, stddev, (3,)),
+                I = np.maximum(np.zeros((3,3)), robot.links[i].I + np.diag(np.random.normal(0, stddev, (3,))))
+            ))
+
+        super().__init__(links, name=robot.name, gravity = robot.gravity)
+        
+        self.realpi = np.zeros(10*n) #real parameters
+        self.pi = np.zeros(10*n) #the ones we believe are true
+        
+        for i in range(n):
+            shift = 10*i
+
+            I_link = self.links[i].I + self.links[i].m*np.matmul(skew(self.links[i].r).T, skew(self.links[i].r))
+            mr = self.links[i].m*self.links[i].r 
+
+            #Computation of actual dynamic parameters of the belief robot
+            self.pi[shift+0] = self.links[i].m 
+            self.pi[shift+1:shift+4] = mr
+            self.pi[shift+4:shift+10] = I_link[np.triu_indices(3)]
+            
+            real_I_link = robot.links[i].I + robot.links[i].m*np.matmul(skew(robot.links[i].r).T, skew(robot.links[i].r))
+            real_mr = robot.links[i].m*robot.links[i].r 
+
+            #Computation of actual dynamic parameters of the real robot (ground truth)
+            self.realpi[shift+0] = robot.links[i].m 
+            self.realpi[shift+1:shift+4] = real_mr
+            self.realpi[shift+4:shift+10] = real_I_link[np.triu_indices(3)]
+                                    
+            
 
 class TwoLink(DHRobot):
     """
@@ -22,8 +68,7 @@ class TwoLink(DHRobot):
             d = 0, #offset along the z axis
             m = 20, #mass of the link
             r = [-0.35,0,0], #position of COM with respect to link frame
-            I=[0, 0, 0.2, 0, 0, 0], #inertia tensor,
-            B = 0, #viscous friction
+            I=[0.0, 1.1, 2.2, 0.1, 1.2, 0.2], #inertia tensor I = [I_xx, I_yy, I_zz,I_xy, I_yz, I_xz]
             qlim=[-135 * deg, 135 * deg]
         )
         link2 = RevoluteDH(
@@ -33,13 +78,12 @@ class TwoLink(DHRobot):
             m = 10,
             r = [-0.25,0,0],
             I=[0, 0, 0.2, 0, 0, 0],
-            B = 0,
             qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
         )
 
         links = [link1, link2]
 
-        super().__init__(links, name="Planar 2R", keywords=("planar",), symbolic = False)
+        super().__init__(links, name="Planar 2R", keywords=("planar",), gravity = [0,-9.81, 0], symbolic = False)
 
         self.qr = np.array([0, pi / 2])
         self.qg = np.array([pi / 2, -pi/2])
@@ -47,9 +91,6 @@ class TwoLink(DHRobot):
         self.addconfiguration("qr", self.qr)
         self.addconfiguration("qg", self.qg)
     
-    def jacob0(self, q=None, T=None, half=None, start=None, end=None):
-        J = DHRobot.jacob0(self,q)
-        return J[0:2,:] 
 
 class ThreeLink(DHRobot):
     """
@@ -78,7 +119,6 @@ class ThreeLink(DHRobot):
             m = 10, #mass of the link
             r = [0.25,0,0], #position of COM with respect to link frame
             I=[0, 0, 5/24, 0, 0, 0], #inertia tensor,
-            B = 0, #viscous friction
             qlim=[-135 * deg, 135 * deg]
         )
         link2 = RevoluteDH(
@@ -88,7 +128,6 @@ class ThreeLink(DHRobot):
             m = 5,
             r = [0.25,0,0],
             I=[0, 0, 5/48, 0, 0, 0],
-            B = 0,
             qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
         )
         link3 = RevoluteDH(
@@ -98,17 +137,13 @@ class ThreeLink(DHRobot):
             m = 5,
             r = [0.25,0,0],
             I=[0, 0, 5/48, 0, 0, 0],
-            B = 0,
             qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
         )
 
         links = [link1, link2, link3]
 
         super().__init__(links, name="Planar 3R", keywords=("planar",), symbolic = symbolic)
-    
-    def jacob0(self, q=None, T=None, half=None, start=None, end=None):
-        J = DHRobot.jacob0(self,q)
-        return J[0:3,:] 
+        
     
 class Polar2R(DHRobot):
     """
@@ -127,7 +162,6 @@ class Polar2R(DHRobot):
             m = 20, #mass of the link
             r = [0,-0.35,0], #position of COM with respect to link frame
             I=[0, 0.2, 0, 0, 0, 0], #inertia tensor,
-            B = 0, #viscous friction
             qlim=[-135 * deg, 135 * deg]
         )
         link2 = RevoluteDH(
@@ -137,7 +171,6 @@ class Polar2R(DHRobot):
             m = 10,
             r = [-0.25,0,0],
             I=[0, 0.1, 0.1, 0, 0, 0],
-            B = 0,
             qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
         )
 
@@ -151,159 +184,209 @@ class Polar2R(DHRobot):
         self.addconfiguration("qr", self.qr)
         self.addconfiguration("qg", self.qg)
     
-    def jacob0(self, q=None, T=None, half=None, start=None, end=None):
-        J = DHRobot.jacob0(self,q)
-        return J[0:2,:] 
-    
-    
-class Puma560(DHRobot):
+
+class SCARA(DHRobot):
     """
-    Class that models a Puma 560 manipulator
-    
-    Defined joint configurations are:
+    Class that models a SCARA type robot with fictituous dynamic parameters
+    Source: https://espace.rmc.ca/jspui/bitstream/11264/942/1/HYBRID%20FORCE-POSITION%20CONTROL%20OF%20A%204-DOF%20SCARA%20MANIPULATOR%20%2827%20October%202022%29.pdf
+    """
+    def __init__(self):
 
-    - qz, zero joint angle configuration, 'L' shaped configuration
-    - qr, vertical 'READY' configuration
-    - qs, arm is stretched out in the x-direction
-    - qn, arm is at a nominal non-singular configuration
-
-    .. note::
-        - SI units are used.
-        - The model includes armature inertia and gear ratios.
-        - The value of m1 is given as 0 here.  Armstrong found no value for it
-          and it does not appear in the equation for tau1 after the
-          substituion is made to inertia about link frame rather than COG
-          frame.
-        - Gravity load torque is the motor torque necessary to keep the joint
-          static, and is thus -ve of the gravity caused torque.
-
-    .. codeauthor:: Peter Corke
-    """  # noqa
-
-    def __init__(self, symbolic=False):
-
-        if symbolic:
-            import spatialmath.base.symbolic as sym
-
-            zero = sym.zero()
-            pi = sym.pi()
-        else:
-            from math import pi
-
-            zero = 0.0
-
+        from math import pi
         deg = pi / 180
-        inch = 0.0254
-
-        base = 26.45 * inch  # from mounting surface to shoulder axis
-
-        L = [
-            RevoluteDH(
-                d=base,  # link length (Dennavit-Hartenberg notation)
-                a=0,  # link offset (Dennavit-Hartenberg notation)
-                alpha=pi / 2,  # link twist (Dennavit-Hartenberg notation)
-                I=[0, 0.35, 0, 0, 0, 0],
-                # inertia tensor of link with respect to
-                # center of mass I = [L_xx, L_yy, L_zz,
-                # L_xy, L_yz, L_xz]
-                r=[0, 0, 0],
-                # distance of ith origin to center of mass [x,y,z]
-                # in link reference frame
-                m=0,  # mass of link
-                Jm=200e-6,  # actuator inertia
-                G=-62.6111,  # gear ratio
-                B=1.48e-3,  # actuator viscous friction coefficient (measured
-                # at the motor)
-                Tc=[0.395, -0.435],
-                # actuator Coulomb friction coefficient for
-                # direction [-,+] (measured at the motor)
-                qlim=[-160 * deg, 160 * deg],  # minimum and maximum joint angle
-            ),
-            RevoluteDH(
-                d=0,
-                a=0.4318,
-                alpha=zero,
-                I=[0.13, 0.524, 0.539, 0, 0, 0],
-                r=[-0.3638, 0.006, 0.2275],
-                m=17.4,
-                Jm=200e-6,
-                G=107.815,
-                B=0.817e-3,
-                Tc=[0.126, -0.071],
-                qlim=[-110 * deg, 110 * deg],  # qlim=[-45*deg, 225*deg]
-            ),
-            RevoluteDH(
-                d=0.15005,
-                a=0.0203,
-                alpha=-pi / 2,
-                I=[0.066, 0.086, 0.0125, 0, 0, 0],
-                r=[-0.0203, -0.0141, 0.070],
-                m=4.8,
-                Jm=200e-6,
-                G=-53.7063,
-                B=1.38e-3,
-                Tc=[0.132, -0.105],
-                qlim=[-135 * deg, 135 * deg],  # qlim=[-225*deg, 45*deg]
-            ),
-            RevoluteDH(
-                d=0.4318,
-                a=0,
-                alpha=pi / 2,
-                I=[1.8e-3, 1.3e-3, 1.8e-3, 0, 0, 0],
-                r=[0, 0.019, 0],
-                m=0.82,
-                Jm=33e-6,
-                G=76.0364,
-                B=71.2e-6,
-                Tc=[11.2e-3, -16.9e-3],
-                qlim=[-266 * deg, 266 * deg],  # qlim=[-110*deg, 170*deg]
-            ),
-            RevoluteDH(
-                d=0,
-                a=0,
-                alpha=-pi / 2,
-                I=[0.3e-3, 0.4e-3, 0.3e-3, 0, 0, 0],
-                r=[0, 0, 0],
-                m=0.34,
-                Jm=33e-6,
-                G=71.923,
-                B=82.6e-6,
-                Tc=[9.26e-3, -14.5e-3],
-                qlim=[-100 * deg, 100 * deg],
-            ),
-            RevoluteDH(
-                d=0,
-                a=0,
-                alpha=zero,
-                I=[0.15e-3, 0.15e-3, 0.04e-3, 0, 0, 0],
-                r=[0, 0, 0.032],
-                m=0.09,
-                Jm=33e-6,
-                G=76.686,
-                B=36.7e-6,
-                Tc=[3.96e-3, -10.5e-3],
-                qlim=[-266 * deg, 266 * deg],
-            ),
-        ]
-
-        super().__init__(
-            L,
-            name="Puma 560",
-            manufacturer="Unimation",
-            keywords=("dynamics", "symbolic", "mesh"),
-            symbolic=symbolic,
-            meshdir="meshes/UNIMATE/puma560",
+            
+        # links
+        link1 = RevoluteDH(
+            alpha = 0, #link twist
+            a = 0.4, #link length
+            d = 0, #offset along the z axis
+            m = 6.01, #mass of the link
+            r = [-0.185,0,0], #position of COM with respect to link frame
+            I=[0.0132, 0.1810, 0.1807, 0, 0, 0], #inertia tensor,
+            qlim=[-135 * deg, 135 * deg]
+        )
+        link2 = RevoluteDH(
+            alpha = 0,
+            a = 0.4,
+            d = 0,
+            m = 5.37,
+            r = [-0.224,0,0],
+            I=[0.0234, 0.1261, 0.1558, 0, 0, 0],
+            qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
+        )
+        link3 = PrismaticDH(
+            theta = 0,
+            a = 0,
+            alpha = 0,
+            m = 4.03,
+            r = [0,0,-0.201], #position of COM with respect to link frame
+            I=[0.0802, 0.0802, 0.0064, 0, 0, 0], #inertia tensor,
+            qlim=[-0.3, 0.1] 
+        )
+        link4 = RevoluteDH(
+            alpha = 0, #link twist
+            a = 0.15, #link length
+            d = 0, #offset along the z axis
+            m = 10, #mass of the link
+            r = [0,0,-0.122], #position of COM with respect to link frame
+            I=[0.0016, 0.0016, 0.0025, 0, 0, 0], #inertia tensor,
+            qlim=[-135 * deg, 135 * deg]
         )
 
-        self.qr = np.array([0, pi / 2, -pi / 2, 0, 0, 0])
-        self.qz = np.zeros(6)
+        links = [link1, link2, link3, link4]
 
-        # nominal table top picking pose
-        self.qn = np.array([0, pi / 4, pi, 0, pi / 4, 0])
+        super().__init__(links, name="SCARA", keywords=("scara",), symbolic = False)
+
+        self.qr = np.array([0, pi / 2])
+        self.qg = np.array([pi / 2, -pi/2])
+
+        self.addconfiguration("qr", self.qr)
+        self.addconfiguration("qg", self.qg)
+    
+    
+class UR3(DHRobot):
+    """
+    Class that models a Universal Robotics UR3 manipulator
+    """  # noqa
+
+    def __init__(self):
+
+
+        from math import pi
+        zero = 0.0
+        deg = pi / 180
+
+        # robot length values (metres)
+        a = [0, -0.24365, -0.21325, 0, 0, 0]
+        d = [0.1519, 0, 0, 0.11235, 0.08535, 0.0819]
+        
+        #link twists
+        alpha = [pi / 2, zero, zero, pi / 2, -pi / 2, zero]
+
+        # mass data, no inertia available
+        mass = [2, 3.42, 1.26, 0.8, 0.8, 0.35]
+        coms = [
+            [0, -0.02, 0],
+            [0.13, 0, 0.1157],
+            [0.05, 0, 0.0238],
+            [0, 0, 0.01],
+            [0, 0, 0.01],
+            [0, 0, -0.02],
+        ]
+        I_link = [0,0,0,0,0,0]
+        links = []
+
+        for j in range(6):
+            link = RevoluteDH(
+                d=d[j], a=a[j], alpha=alpha[j], m=mass[j], r=coms[j], I = I_link
+            )
+            links.append(link)
+
+        super().__init__(
+            links,
+            name="UR3",
+            manufacturer="Universal Robotics",
+            keywords=("dynamics", "symbolic")
+        )
+
+        self.qr = np.array([180, 0, 0, 0, 90, 0]) * deg
+        self.qz = np.zeros(6)
 
         self.addconfiguration("qr", self.qr)
         self.addconfiguration("qz", self.qz)
-        self.addconfiguration("qn", self.qn)
 
-        # straight and horizontal
-        self.addconfiguration_attr("qs", np.array([0, 0, -pi / 2, 0, 0, 0]))
+    
+# class KUKALWR(DHRobot):
+#     """
+#     Class that models a KUKA LWR manipulator
+#     """ 
+
+#     def __init__(self):
+        
+#         from math import pi
+#         zero = 0.0
+#         deg = pi / 180
+#         inch = 0.0254
+
+#         L = [
+#             RevoluteDH( #zero frame is at the shoulder
+#                 d=0,  # link length (Denavit-Hartenberg notation)
+#                 a=0,  # link offset (Denavit-Hartenberg notation)
+#                 alpha = pi/2,  # link twist (Dennavit-Hartenberg notation)
+#                 I=[0, -0.35, 0, 0, 0, 0],
+#                 # inertia tensor of link with respect to
+#                 # center of mass I = [L_xx, L_yy, L_zz,
+#                 # L_xy, L_yz, L_xz]
+#                 r=[0, 0, 0],
+#                 # distance of ith origin to center of mass [x,y,z]
+#                 # in link reference frame
+#                 m=0,  # mass of link
+#                 qlim=[-160 * deg, 160 * deg],  # minimum and maximum joint angle
+#             ),
+#             RevoluteDH(
+#                 d=0,
+#                 a=0,
+#                 alpha = -pi/2,
+#                 I=[0.13, 0.524, 0.539, 0, 0, 0],
+#                 r=[-0.3638, 0.006, 0.2275],
+#                 m=17.4,
+#                 qlim=[-110 * deg, 110 * deg],  # qlim=[-45*deg, 225*deg]
+#             ),
+#             RevoluteDH(
+#                 d=0.4,
+#                 a=0,
+#                 alpha= -pi/2,
+#                 I=[0.066, 0.086, 0.0125, 0, 0, 0],
+#                 r=[-0.0203, -0.0141, 0.070],
+#                 m=4.8,
+#                 qlim=[-135 * deg, 135 * deg],  # qlim=[-225*deg, 45*deg]
+#             ),
+#             RevoluteDH(
+#                 d=0,
+#                 a=0,
+#                 alpha = pi/2,
+#                 I=[1.8e-3, 1.3e-3, 1.8e-3, 0, 0, 0],
+#                 r=[0, 0.019, 0],
+#                 m=0.82,
+#                 qlim=[-266 * deg, 266 * deg],  # qlim=[-110*deg, 170*deg]
+#             ),
+#             RevoluteDH(
+#                 d=0.39,
+#                 a=0,
+#                 alpha= pi/2,
+#                 I=[0.3e-3, 0.4e-3, 0.3e-3, 0, 0, 0],
+#                 r=[0, 0, 0],
+#                 m=0.34,
+#                 qlim=[-100 * deg, 100 * deg],
+#             ),
+#             RevoluteDH(
+#                 d=0,
+#                 a=0,
+#                 alpha=zero,
+#                 I=[0.15e-3, 0.15e-3, 0.04e-3, 0, 0, 0],
+#                 r=[0, 0, 0.032],
+#                 m=0.09,
+#                 qlim=[-266 * deg, 266 * deg],
+#             ),
+#         ]
+
+#         super().__init__(
+#             L,
+#             name="Puma 560",
+#             manufacturer="Unimation",
+#             keywords=("dynamics", "symbolic", "mesh"),
+#             meshdir="meshes/UNIMATE/puma560",
+#         )
+
+#         self.qr = np.array([0, pi / 2, -pi / 2, 0, 0, 0])
+#         self.qz = np.zeros(6)
+
+#         # nominal table top picking pose
+#         self.qn = np.array([0, pi / 4, pi, 0, pi / 4, 0])
+
+#         self.addconfiguration("qr", self.qr)
+#         self.addconfiguration("qz", self.qz)
+#         self.addconfiguration("qn", self.qn)
+
+#         # straight and horizontal
+#         self.addconfiguration_attr("qs", np.array([0, 0, -pi / 2, 0, 0, 0]))
