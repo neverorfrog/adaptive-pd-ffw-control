@@ -34,6 +34,8 @@ class ClippedTrajectory():
     
 class Profiler():
     logger = dict()
+    meantimes = dict()
+    occurences = dict()
     process_name = ""
     lastCheckpoint = 0
 
@@ -43,10 +45,29 @@ class Profiler():
 
     def stop():
         tmpCheckpoint = time.process_time()
-        Profiler.logger[Profiler.process_name] = tmpCheckpoint - Profiler.lastCheckpoint
+        elapsed_time = tmpCheckpoint - Profiler.lastCheckpoint
+        Profiler.logger[Profiler.process_name] = elapsed_time
+        
+        #Mean time stuff
+        try:
+            first_time = Profiler.meantimes[Profiler.process_name] is None
+            current_mean = Profiler.meantimes[Profiler.process_name]
+        except KeyError: #first time for the process
+            Profiler.meantimes[Profiler.process_name] = 0
+            Profiler.occurences[Profiler.process_name] = 0 
+            
+        current_mean = Profiler.meantimes[Profiler.process_name]
+        Profiler.occurences[Profiler.process_name] += 1    
+        i = Profiler.occurences[Profiler.process_name]
+        Profiler.meantimes[Profiler.process_name] += (1/i)*(elapsed_time - current_mean)
 
     def print():
-        pprint.pprint(Profiler.logger)
+        pprint.pprint(f"{Profiler.logger:.3f}")
+        
+    def mean():
+        print("MEANTIIIIIMES")
+        pprint.pprint(Profiler.meantimes)
+        
     
 def sat(x, m=1):
     return min(max(-1, m*x), 1)
@@ -85,104 +106,7 @@ def lambdaMax(matrix):
     return max(eigenVal)
 
 
-def checkGains(model, n, q_d, qd_d, qdd_d):
-
-        M = sympy.Matrix(model.inertia_parametrized)
-        g = sympy.Matrix(model.gravity_parametrized)        
-
-        q = sym.symbol(f"q(1:{n+1})")  # link variables
-        candidates = [0, pi/2, pi, 3/2*pi]
-        tmp_cand = np.repeat([candidates],n,axis=0)
-        km = 0
-        kc1 = 0
-        kc2 = 0
-        kg = 0
-        k1 = 0
-        k2 = 0
-
-        for i in range(n):
-            diffM = M.diff(q[i])
-            c_i = self.dynamicModel.getChristoffel(i, self.robot, self.beliefPi)
-            c_i = self.dynamicModel.getChristoffel(i, self.robot, self.beliefPi)
-            diffG = g.diff(q[i])
-            diffc_i = c_i.diff(q[i])
-            for configuration in itertools.product(*tmp_cand):
-                configuration = list(configuration)
-                #Evaluate differentiated matrices for every possible tuple of candidates
-                evM = model.evaluateMatrix(M, configuration, [0]*n, [0]*n, [0]*n)
-                evdiffM = model.evaluateMatrix(diffM, configuration, [0]*n, [0]*n, [0]*n)
-                evC = model.evaluateMatrix(c_i, configuration, [0]*n, [0]*n, [0]*n)
-                evdiffC = self.dynamicModel.evaluateMatrix(diffc_i, configuration, [0]*n, [0]*n, [0]*n)
-                evG = self.dynamicModel.evaluateMatrix(g, configuration, [0]*n, [0]*n, [0]*n)
-                evdiffG = self.dynamicModel.evaluateMatrix(diffG, configuration, [0]*n, [0]*n, [0]*n)
-                evdiffM = np.abs(evdiffM)
-                evC = np.abs(evC)
-                evdiffC = np.abs(evdiffC)
-                evdiffG = np.abs(evdiffG)
-                evG = norm(evG)
-                #Max of evaluated matrices
-                km = max(km, np.max(evdiffM))
-                kc1 = max(kc1, np.max(evC))
-                kc2 = max(kc2, np.max(evdiffC))
-                kg = max(kg, np.max(evdiffG))
-                k1 = max(k1, np.max(evG))
-                k2 = max(k2, lambdaMax(np.array(evM,dtype=float)))
-                
-        
-        km *= n**2
-        kc1 *= n**2 
-        kc2 *= n**3
-        kg *= n 
-
-        '''
-        BEST = []
-        maxr = 0
-        for q1 in np.arange(-pi, pi, 0.5):
-            for q2 in np.arange(-pi, pi, 0.5):
-
-                for qq1 in np.arange(-pi, pi, 0.5):
-                    for qq2 in np.arange(-pi, pi, 0.5):
-
-                        for qqq1 in np.arange(-pi, pi, 0.5):
-                            for qqq2 in np.arange(-pi, pi, 0.5):
-                                print(q1,q2,qq1,qq2,maxr)
-                                if(np.linalg.norm(np.array([q1,q2]) - np.array([qq1,qq2]))*np.linalg.norm(np.array([qqq1,qqq2])) == 0):
-                                    continue
-                                c = self.robot.inertia()
-                                ratio = np.linalg.norm(np.matmul(c, np.array([qqq1,qqq2])))/ (np.linalg.norm(np.array([qq1,qq2]))*np.linalg.norm(np.array([qqq1,qqq2])))
-                                if ratio > maxr:
-                                    maxr = ratio
-                                    BEST = [q1,q2,qq1,qq2,qqq1,qqq2]
-
-        print(f"WITH ITERATIVE METHOD: {maxr} WITH CLOSED METHOD: {kc1} BEST: {BEST}")
-        '''
-
-        M = np.array(self.dynamicModel.inertia(self.robot.q), dtype=float) 
-        qdd_bound = 1
-        qd_bound = 1
-        m = math.sqrt(n) * (kg + km*qdd_bound + kc2*(qd_bound**2))
-        delta = 1 
-        p = m + delta
-        
-        epsilon = 2*k1/kg + 2*k2/km + 2*kc1/kc2
-                
-        condition22 = p**2 * lambdaMax(M)
-        condition33 = 2*(math.sqrt(n)*kc1*p*epsilon + p*lambdaMax(M) + kc1*math.sqrt(qd_bound))
-        condition34 = 3*p + (p * (2*kc1*math.sqrt(qd_bound) + lambdaMax(self.kd) + 3)**2)/(2*lambdaMin(self.kd))
-        
-        print(f"condition22: {condition22}")
-        print(f"condition33: {condition33}")
-        print(f"condition34: {condition34}")
-        
-
-        # Condition 22 
-        # assert(lambdaMin(self.kp) > condition22)
-        # print("Condition 22 passed")
-
-        # Condition 33
-        # assert(lambdaMin(self.kd) >  condition33)
-        # print("Condition 33 passed")
-
-        # Condition 34
-        # assert(lambdaMin(self.kp) > condition34)
-        # print("Condition 34 passed")
+if __name__ == "__main__":
+    d = dict()
+    d["hi"] = 1
+    print(d["hii"] is None)

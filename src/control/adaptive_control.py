@@ -9,16 +9,12 @@ from tools.dynamics import *
 import itertools
 from sympy import trigsimp
 
-class AdaptiveControl(TrajectoryControl):
-    def __init__(self, robot = None, env = None, dynamicModel = None, plotting = True):
-        super().__init__(robot, env, model, plotting)
-        self.dynamicModel = dynamicModel
-        
-
-class Adaptive_FFW(AdaptiveControl):
+class Adaptive_FFW(TrajectoryControl):
 
     def __init__(self, robot = None, env = None, dynamicModel: EulerLagrange = None, plotting = True):
         super().__init__(robot, env, dynamicModel, plotting)
+        self.dynamicModel = dynamicModel
+        
 
     def checkGains(self, q_d, qd_d, qdd_d):
         
@@ -143,7 +139,6 @@ class Adaptive_FFW(AdaptiveControl):
 
         Profiler.start("Y evaluation")
         actualY = self.dynamicModel.evaluateY(q_d, qd_d, qd_d, qdd_d)
-        print(actualY.shape)
         Profiler.stop()
 
         Profiler.start("Feedback loop")
@@ -170,13 +165,15 @@ class Adaptive_FFW(AdaptiveControl):
 if __name__ == "__main__":
     
     robot = ParametrizedRobot(TwoLink(), stddev = 5)
-    # model = EulerLagrange(robot, os.path.join("src/models",robot.name), planar = True)
-    model = EulerLagrange(robot, planar = True)
+    model = EulerLagrange(robot, os.path.join("src/models",robot.name))
+    # model = EulerLagrange(robot)
     Profiler.print()
             
-    traj = ClippedTrajectory(robot.q, [pi/2,pi/2], 4)
+    traj = ClippedTrajectory(robot.q, [pi/2,pi/3], 4)
     loop = Adaptive_FFW(robot, PyPlot(), model, plotting = True)
     loop.setR(reference = traj, threshold = 0.05)
     loop.setK(kp= [200,80], kd = [60,40]) 
     loop.simulate(dt = 0.01)
     loop.plot()
+    Profiler.mean()
+    
