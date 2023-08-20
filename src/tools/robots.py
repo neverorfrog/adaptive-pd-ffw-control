@@ -12,19 +12,7 @@ class ParametrizedRobot(DHRobot):
         robot = realrobot
         n = len(robot.links)
         self.realrobot = realrobot
-        
-        links = []
-        for i in range(n):
-            links.append(RevoluteDH( 
-                a = robot.links[i].a,
-                alpha = robot.links[i].alpha,
-                d = robot.links[i].d,
-                m = max(0, robot.links[i].m + np.random.normal(0, stddev)),
-                r = robot.links[i].r + np.random.normal(0, stddev, (3,)),
-                I = np.maximum(np.zeros((3,3)), robot.links[i].I + np.diag(np.random.normal(0, stddev, (3,))))
-            ))
-
-        super().__init__(links, name=robot.name, gravity = robot.gravity)
+        super().__init__(robot.links, name=robot.name, gravity = robot.gravity)
         
         self.realpi = np.zeros(10*n) #real parameters
         self.pi = np.zeros(10*n) #the ones we believe are true
@@ -32,17 +20,14 @@ class ParametrizedRobot(DHRobot):
         for i in range(n):
             shift = 10*i
 
-            I_link = self.links[i].I + self.links[i].m*np.matmul(skew(self.links[i].r).T, skew(self.links[i].r))
-            mr = self.links[i].m*self.links[i].r 
-
-            #Computation of actual dynamic parameters of the belief robot
-            self.pi[shift+0] = self.links[i].m 
-            self.pi[shift+1:shift+4] = mr
-            self.pi[shift+4:shift+10] = I_link[np.triu_indices(3)]
-            
             real_I_link = robot.links[i].I + robot.links[i].m*np.matmul(skew(robot.links[i].r).T, skew(robot.links[i].r))
             real_mr = robot.links[i].m*robot.links[i].r 
 
+            #Computation of actual dynamic parameters of the belief robot
+            self.pi[shift+0] = max(0, robot.links[i].m + np.random.normal(0, stddev, 1))
+            self.pi[shift+1:shift+4] = real_mr + np.random.normal(0, stddev, (3,))
+            self.pi[shift+4:shift+10] = np.maximum(real_I_link[np.triu_indices(3)], np.random.normal(0, stddev, (6,)))
+            
             #Computation of actual dynamic parameters of the real robot (ground truth)
             self.realpi[shift+0] = robot.links[i].m 
             self.realpi[shift+1:shift+4] = real_mr

@@ -120,7 +120,7 @@ class EulerLagrange():
                 
     def movingFrames(self, robot):
         n = self.n
-        gv = np.array([0, -9.81, 0]) if self.planar else np.array([0, 0, -9.81])
+        gv = np.array([0, 9.81, 0]) if self.planar else np.array([0, 0, 9.81])
         ri = np.full((3,), sym.zero(), dtype = object) #vector from RF i-1 to i wrt RF i-1
         Rinv = np.full((3,3), sym.zero(), dtype = object) #ith matrix representing rotation from Rf i to Rf i-1
         iwi = np.full((3,), sym.zero(), dtype = object) #angular velocity of link i wrt RF i
@@ -256,13 +256,35 @@ class EulerLagrange():
     
 
 if __name__ == "__main__":
-    robot = ParametrizedRobot(UR3())
-    model = EulerLagrange(robot, os.path.join("src/models",robot.name))
+    robot = ParametrizedRobot(TwoLink())
+    # model = EulerLagrange(robot, os.path.join("src/models",robot.name))
+    model = EulerLagrange(robot, planar = True)
     
-    q = [1,3,1,1,1,1]
+    q = [pi/2,pi/2]
+    qd = [0.3,0]
     
-    me = model.inertia(q)
-    corke = robot.inertia(q)   
-    print()
-    print(f"ERROR MATRIX: {me - corke}")
-    print(f"ERROR NORM: {(me-corke).norm()}")
+    my_M = model.inertia(q)
+    c_M = robot.inertia(q)   
+    print(f"ERROR M: {my_M - c_M}")
+    print(f"ERROR NORM: {(my_M-c_M).norm()}")
+    
+    my = model.coriolis(q,qd)
+    c = robot.coriolis(q,qd)   
+    print(f"ERROR S: {my - c}")
+    print(f"ERROR NORM: {(my-c).norm()}")
+    
+    my = model.gravity(q)
+    c = robot.gravload(q).reshape(-1,1)  
+    print(f"ERROR g: {c}")
+    print(f"ERROR NORM: {(my-c).norm()}")
+    
+    
+    q_d = [pi/2,pi/2+0.001]
+    qd_d = [0.2,0]
+    qdd_d = [-0.1,0]
+    
+    print(model.Y)
+    Y = model.evaluateY(q_d,qd_d,qd_d,qdd_d)
+                    
+    print(model.evaluateY(q_d,qd_d,qd_d,qdd_d) @ robot.pi)
+    print(f"CORKE u: {robot.inertia(q_d) @ qdd_d + robot.coriolis(q_d, qd_d) @ qd_d + robot.gravload(q_d, gravity = [0,-9.81,0])}")
