@@ -68,7 +68,7 @@ class TwoLink(DHRobot):
 
         links = [link1, link2]
 
-        super().__init__(links, name="Planar 2R", keywords=("planar",), gravity = [0,-9.81, 0], symbolic = False)
+        super().__init__(links, name="Planar 2R", keywords=("planar",), symbolic = False)
 
         self.qr = np.array([0, pi / 2])
         self.qg = np.array([pi / 2, -pi/2])

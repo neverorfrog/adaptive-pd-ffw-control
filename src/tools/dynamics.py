@@ -242,13 +242,12 @@ class EulerLagrange():
     
 
 if __name__ == "__main__":
-    robot = ParametrizedRobot(Puma560())
+    robot = ParametrizedRobot(Polar2R())
     model = EulerLagrange(robot, os.path.join("src/models",robot.name))
-    # model = EulerLagrange(robot)
     
-    q = [pi/2,pi/2,pi/2,pi/2,0,0]
-    qd = [0.3,0,0,0,0,0]
-    qdd = [-0.1,0,0,0,0,0]
+    q = [pi/2,pi/2]
+    qd = [0.3,0]
+    qdd = [-0.1,0]
     
     Profiler.start("EVALUATION")
     my_M = model.inertia(q)
@@ -266,10 +265,8 @@ if __name__ == "__main__":
     print(f"MY g: {my}")
     print(f"CORKE g: {c}")
     print(f"ERROR NORM: {(my-c).norm()}")
-        
-    Y = model.evaluateY(q,qd,qd,qdd)
-                    
-    print(model.evaluateY(q,qd,qd,qdd) @ robot.realpi)
+                            
+    print(f"MY u: {model.evaluateY(q,qd,qd,qdd) @ robot.realpi}")
     print(f"CORKE u: {robot.inertia(q) @ qdd + robot.coriolis(q, qd) @ qd + robot.gravload(q, gravity = [0,0,-9.81])}")
     Profiler.stop()
     Profiler.print()
