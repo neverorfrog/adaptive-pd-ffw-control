@@ -225,9 +225,9 @@ class EulerLagrange():
     def evaluateY(self, q, qd, qd_S, qdd):
         return self.evaluateMatrix(self.Y, q, qd, qd_S, qdd)
     
-    def getChristoffel(self,k,robot,pi):
+    def getChristoffel(self,k):
         n = self.n
-        M = sympy.Matrix(self.getM(robot, pi))
+        M = sympy.Matrix(self.evaluateMatrixPi(self.M))
         q = sym.symbol(f"q(1:{n+1})") 
         c = sympy.Matrix(np.ndarray((n,n)))
 

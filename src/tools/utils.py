@@ -1,8 +1,11 @@
+import itertools
 import time
 import pprint
 import numpy as np
+import spatialmath.base.symbolic as sym
 import sympy
 from roboticstoolbox.tools.trajectory import *
+from math import pi
 
 class ClippedTrajectory():
     def __init__(self, functions, T) -> None:
@@ -62,7 +65,7 @@ class Profiler():
         Profiler.meantimes[Profiler.process_name] += (1/i)*(elapsed_time - current_mean)
 
     def print():
-        pprint.pprint(f"{Profiler.logger:.3f}")
+        pprint.pprint(Profiler.logger)
         
     def mean():
         print("MEANTIIIIIMES")
@@ -104,6 +107,109 @@ def lambdaMin(matrix):
 def lambdaMax(matrix):
     eigenVal, _ = np.linalg.eig(matrix)
     return max(eigenVal)
+
+
+def checkGains(dynamicModel, robot, kp, kd):
+    
+    n = len(robot.links)
+
+    M = sympy.Matrix(dynamicModel.evaluateMatrixPi(dynamicModel.M))
+    g = sympy.Matrix(dynamicModel.evaluateMatrixPi(dynamicModel.g))      
+    q = sym.symbol(f"q(1:{n+1})")  # link variables
+    candidates = [0, pi/2, pi, 3/2*pi]
+    tmp_cand = np.repeat([candidates],n,axis=0)
+    km = 0
+    kc1 = 0
+    kc2 = 0
+    kg = 0
+    k1 = 0
+    k2 = 0
+
+    for i in range(n):
+        diffM = M.diff(q[i])
+        c_i = dynamicModel.getChristoffel(i)
+        c_i = dynamicModel.getChristoffel(i)
+        diffG = g.diff(q[i])
+        diffc_i = c_i.diff(q[i])
+        for configuration in itertools.product(*tmp_cand):
+            configuration = list(configuration)
+            #Evaluate differentiated matrices for every possible tuple of candidates
+            evM = dynamicModel.evaluateMatrix(M, configuration, [0]*n, [0]*n, [0]*n)
+            evdiffM = dynamicModel.evaluateMatrix(diffM, configuration, [0]*n, [0]*n, [0]*n)
+            evC = dynamicModel.evaluateMatrix(c_i, configuration, [0]*n, [0]*n, [0]*n)
+            evdiffC = dynamicModel.evaluateMatrix(diffc_i, configuration, [0]*n, [0]*n, [0]*n)
+            evG = dynamicModel.evaluateMatrix(g, configuration, [0]*n, [0]*n, [0]*n)
+            evdiffG = dynamicModel.evaluateMatrix(diffG, configuration, [0]*n, [0]*n, [0]*n)
+            evdiffM = np.abs(evdiffM)
+            evC = np.abs(evC)
+            evdiffC = np.abs(evdiffC)
+            evdiffG = np.abs(evdiffG)
+            evG = norm(evG)
+            #Max of evaluated matrices
+            km = max(km, np.max(evdiffM))
+            kc1 = max(kc1, np.max(evC))
+            kc2 = max(kc2, np.max(evdiffC))
+            kg = max(kg, np.max(evdiffG))
+            k1 = max(k1, np.max(evG))
+            k2 = max(k2, lambdaMax(np.array(evM,dtype=float)))
+            
+    
+    km *= n**2
+    kc1 *= n**2 
+    kc2 *= n**3
+    kg *= n 
+
+    '''
+    BEST = []
+    maxr = 0
+    for q1 in np.arange(-pi, pi, 0.5):
+        for q2 in np.arange(-pi, pi, 0.5):
+
+            for qq1 in np.arange(-pi, pi, 0.5):
+                for qq2 in np.arange(-pi, pi, 0.5):
+
+                    for qqq1 in np.arange(-pi, pi, 0.5):
+                        for qqq2 in np.arange(-pi, pi, 0.5):
+                            print(q1,q2,qq1,qq2,maxr)
+                            if(np.linalg.norm(np.array([q1,q2]) - np.array([qq1,qq2]))*np.linalg.norm(np.array([qqq1,qqq2])) == 0):
+                                continue
+                            c = self.robot.inertia()
+                            ratio = np.linalg.norm(np.matmul(c, np.array([qqq1,qqq2])))/ (np.linalg.norm(np.array([qq1,qq2]))*np.linalg.norm(np.array([qqq1,qqq2])))
+                            if ratio > maxr:
+                                maxr = ratio
+                                BEST = [q1,q2,qq1,qq2,qqq1,qqq2]
+
+    print(f"WITH ITERATIVE METHOD: {maxr} WITH CLOSED METHOD: {kc1} BEST: {BEST}")
+    '''
+
+    M = np.array(dynamicModel.inertia(robot.q), dtype=float) 
+    qdd_bound = 1
+    qd_bound = 1
+    m = math.sqrt(n) * (kg + km*qdd_bound + kc2*(qd_bound**2))
+    delta = 1 
+    p = m + delta
+    
+    epsilon = 2*k1/kg + 2*k2/km + 2*kc1/kc2
+            
+    condition22 = p**2 * lambdaMax(M)
+    condition33 = 2*(math.sqrt(n)*kc1*p*epsilon + p*lambdaMax(M) + kc1*math.sqrt(qd_bound))
+    condition34 = 3*p + (p * (2*kc1*math.sqrt(qd_bound) + lambdaMax(kd) + 3)**2)/(2*lambdaMin(kd))
+    
+    print(f"condition22: {condition22}")
+    print(f"condition33: {condition33}")
+    print(f"condition34: {condition34}")
+
+    # Condition 22 
+    assert(lambdaMin(kp) > condition22)
+    print("Condition 22 passed")
+
+    # Condition 33
+    assert(lambdaMin(kd) >  condition33)
+    print("Condition 33 passed")
+
+    # Condition 34
+    assert(lambdaMin(kp) > condition34)
+    print("Condition 34 passed")
 
 
 if __name__ == "__main__":
