@@ -168,6 +168,50 @@ class Polar2R(DHRobot):
 
         self.addconfiguration("qr", self.qr)
         self.addconfiguration("qg", self.qg)
+        
+
+class Spatial3R(DHRobot):
+    """
+    Class that models a 3-link antropomorphic robot with fictituous dynamic parameters
+    """
+    def __init__(self):
+
+        from math import pi
+        deg = pi / 180
+            
+        # links
+        link1 = RevoluteDH(
+            alpha = pi/2, #link twist
+            a = 0, #link length
+            d = 0.5, #offset along the z axis
+            m = 10, #mass of the link
+            r = [0,-0.35,0], #position of COM with respect to link frame
+            I=[0, 0.2, 0, 0, 0, 0], #inertia tensor,
+            qlim=[-135 * deg, 135 * deg]
+        )
+        link2 = RevoluteDH(
+            alpha = 0,
+            a = 0.4,
+            d = 0,
+            m = 3,
+            r = [-0.25,0,0],
+            I=[0, 0.1, 0.1, 0, 0, 0],
+            qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
+        )
+        link3 = RevoluteDH(
+            alpha = 0,
+            a = 0.4,
+            d = 0,
+            m = 3,
+            r = [-0.25,0,0],
+            I=[0, 0.1, 0.1, 0, 0, 0],
+            qlim=[-135 * deg, 135 * deg]  # minimum and maximum joint angle
+        )
+
+        links = [link1, link2, link3]
+
+        super().__init__(links, name="Spatial 3R", keywords=("polar",), symbolic = False)
+    
     
 
 class SCARA(DHRobot):
@@ -239,7 +283,6 @@ class UR3(DHRobot):
 
         from math import pi
         zero = 0.0
-        deg = pi / 180
 
         # robot length values (metres)
         a = [0, -0.24365, -0.21325, 0, 0, 0]
@@ -274,11 +317,9 @@ class UR3(DHRobot):
             keywords=("dynamics", "symbolic")
         )
 
-        self.qr = np.array([180, 90, 0, 45, 90, 0]) * deg
-        self.qz = np.zeros(6)
+        self.q = np.array([0, 0, 0, 0, 0, 0]) 
 
-        self.addconfiguration("qr", self.qr)
-        self.addconfiguration("qz", self.qz)
+        self.addconfiguration("qr", self.q)
         
     
 class Puma560(DHRobot):
