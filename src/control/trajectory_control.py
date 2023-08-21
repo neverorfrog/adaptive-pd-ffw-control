@@ -15,7 +15,7 @@ import spatialmath.base.symbolic as sym
 class TrajectoryControl(Control):
     def __init__(self, robot=None, env=None, model = None, plotting = True):
         super().__init__(robot, env, plotting)
-        self.gravity = [0,9.81,0] if model.planar else [0,0,9.81]
+        self.gravity = np.array([0,9.81,0]) if model.planar else np.array([0,0,9.81])
         self.u = [robot.gravload(self.robot.q, self.gravity)]
         
     def apply(self, torque) -> None:

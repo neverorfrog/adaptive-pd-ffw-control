@@ -176,32 +176,35 @@ class EulerLagrange():
     def getY(self, simplify = False):
         return sym.simplify(self.Y) if simplify else self.Y  
     
-    def evaluateMatrixPi(self, matrix):
+    def evaluateMatrixPi(self, matrix, pi):
         n = self.n
         sympi = sym.symbol(f"pi_(1:{10*n+1})")                     
         matrix = sympy.Matrix(matrix)
         d = dict()
             
         for i in range(len(self.robot.pi)):
-            d[sympi[self.kindices[i]]] = self.robot.pi[i]
+            d[sympi[self.kindices[i]]] = pi[i]
                           
         return matrix.xreplace(d).evalf()
 
-    def gravity(self, q):
+    def gravity(self, q, evaluateReal = False):
+        pi = self.robot.realpi if evaluateReal else self.robot.pi
         n = self.n
-        gravity = self.evaluateMatrixPi(self.g)
+        gravity = self.evaluateMatrixPi(self.g, pi)
         gravity = self.evaluateMatrix(gravity, q, [0]*n,[0]*n,[0]*n)
         return gravity
     
-    def coriolis(self, q, qd):
+    def coriolis(self, q, qd, evaluateReal = False):
+        pi = self.robot.realpi if evaluateReal else self.robot.pi 
         n = self.n
-        coriolis = self.evaluateMatrixPi(self.S)
+        coriolis = self.evaluateMatrixPi(self.S, pi)
         coriolis = self.evaluateMatrix(coriolis, q, qd, [0]*n,[0]*n)
         return coriolis
     
-    def inertia(self, q):
+    def inertia(self, q, evaluateReal = False):
+        pi = self.robot.realpi if evaluateReal else self.robot.pi 
         n = self.n
-        inertia = self.evaluateMatrixPi(self.M)
+        inertia = self.evaluateMatrixPi(self.M, pi)
         inertia = self.evaluateMatrix(inertia, q, [0]*n, [0]*n,[0]*n)
         return inertia
 
