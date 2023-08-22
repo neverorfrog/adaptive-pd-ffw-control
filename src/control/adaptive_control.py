@@ -79,16 +79,15 @@ class Adaptive_FFW(TrajectoryControl):
     
 if __name__ == "__main__":
     
-    robot = ParametrizedRobot(TwoLink(), stddev = 5)
+    robot = ParametrizedRobot(Puma560(), stddev = 5)
     model = EulerLagrange(robot, os.path.join("src/models",robot.name))
-    # model = EulerLagrange(robot)
     Profiler.print()
             
-    traj = ClippedTrajectory(robot.q, [pi/2,pi/3], 4)
+    traj = ClippedTrajectory(robot.q, [pi/2,pi/3,-pi/3,-pi/4,pi/2,pi/3], 4)
     loop = Adaptive_FFW(robot, PyPlot(), model, plotting = True)
     loop.setR(reference = traj, threshold = 0.05)
-    loop.setK(kp= [200,80], kd = [60,40]) 
-    loop.simulate(dt = 0.01)
+    loop.setK(kp= [200,200,190,180,150,150], kd = [80,80,70,70,60,55]) 
+    loop.simulate(dt = 0.001)
     loop.plot()
     Profiler.mean()
     
