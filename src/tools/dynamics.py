@@ -144,20 +144,20 @@ class EulerLagrange():
                                                     
             #Kinetic Energy
             im1wi = iwi + (1-sigma) * q_d[i] * np.array([0,0,1]) #omega of link i wrt RF i-1 (3 x 1) 
-            iwi = trigsimp( nsimplify(Rinv @ im1wi, tolerance = 1e-10, rational = True) )
+            iwi = trigsimp( nsimplify(Rinv @ im1wi, tolerance = 1e-6, rational = True) )
             im1vi = ivi + sigma * q_d[i] * np.array([0,0,1]) + np.cross(im1wi, ri) #linear v of link i wrt RF i-1
-            ivi = trigsimp( nsimplify(Rinv @ im1vi, tolerance = 1e-10, rational = True) )
+            ivi = trigsimp( nsimplify(Rinv @ im1vi, tolerance = 1e-6, rational = True) )
             mirci = np.array(self.pi[offset+1:offset+4])
             I_link = np.array([[self.pi[offset+4], self.pi[offset+5], self.pi[offset+6]],
                                [self.pi[offset+5], self.pi[offset+7], self.pi[offset+8]],
                                [self.pi[offset+6], self.pi[offset+8], self.pi[offset+9]]])
             
-            first = 0.5 * self.pi[offset+0] * nsimplify(np.matmul(ivi,ivi).evalf(), tolerance = 1e-10, rational = True)
-            second = nsimplify( np.matmul(np.matmul(mirci, skew(ivi)), iwi).evalf() , tolerance = 1e-10, rational = True)
-            third = 0.5 * np.matmul(np.matmul(iwi, I_link), iwi) 
+            first = trigsimp( 0.5 * self.pi[offset+0] * nsimplify(np.matmul(ivi,ivi).evalf(), tolerance = 1e-6, rational = True) )
+            second = trigsimp( nsimplify( np.matmul(np.matmul(mirci, skew(ivi)), iwi).evalf() , tolerance = 1e-6, rational = True) )
+            third = trigsimp( 0.5 * np.matmul(np.matmul(iwi, I_link), iwi) )
             
-            Ti = first + second  + third
-            T = T + Ti
+            Ti = trigsimp( first + second  + third )
+            T = trigsimp(T + Ti)
                    
             #Potential Energy
             rot0i = robot.A(i,q).R #transformation from RF 0 to RF i+1

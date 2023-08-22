@@ -186,6 +186,7 @@ def checkGains(dynamicModel, robot, kp, kd):
     qdd_bound = 1
     qd_bound = 1
     m = math.sqrt(n) * (kg + km*qdd_bound + kc2*(qd_bound**2))
+    print(m)
     delta = 1 
     p = m + delta
     
