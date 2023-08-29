@@ -7,6 +7,8 @@ import os
 from sympy import trigsimp, expand, nsimplify, evalf
 from math import pi
 from operator import itemgetter
+from math import sin, cos
+
 
 class EulerLagrange():
 
@@ -218,19 +220,22 @@ class EulerLagrange():
         d = dict()
 
         for i in range(self.n):
+            d[sympy.sin(q_sym[i])] = sin(q[i])
+            d[sympy.cos(q_sym[i])] = cos(q[i])
             d[q_sym[i]] = q[i]
             d[qd_sym[i]] = qd[i]
             d[qd_S_sym[i]] = qd_S[i]
             d[qdd_sym[i]] = qdd[i]
-        
+
         return mat.xreplace(d).evalf()
     
     def evaluateY(self, q, qd, qd_S, qdd):
         return self.evaluateMatrix(self.Y, q, qd, qd_S, qdd)
     
-    def getChristoffel(self,k):
+    def getChristoffel(self,k, evaluateReal = False):
         n = self.n
-        M = sympy.Matrix(self.evaluateMatrixPi(self.M))
+        pi = self.robot.realpi if evaluateReal else self.robot.pi 
+        M = sympy.Matrix(self.evaluateMatrixPi(self.M,pi))
         q = sym.symbol(f"q(1:{n+1})") 
         c = sympy.Matrix(np.ndarray((n,n)))
 

@@ -24,17 +24,48 @@ class ClippedTrajectory():
         qd_d = np.ndarray((n))
         qdd_d = np.ndarray((n))
         
-        i = 0
-        for f in self.functions:
+        for i,f in enumerate(self.functions):
             q,qd,qdd = f(min(t,self.T))
             q_d[i] = q; qd_d[i] = qd; qdd_d[i] = qdd
-            i = i+1
         
         return q_d, qd_d, qdd_d
 
     def getTrajList(self):
         return self.functions
-    
+
+class ExcitingTrajectory():
+    MAGIC_OVERFLOW = 7
+    def __init__(self, params) -> None:
+        assert(len(params[0]) == 4)
+        self.functions = [self.fz(el) for el in params]
+
+    def fz(self, param):
+        c1, a, c2, omega = param
+        return lambda t: (
+            c1*(1-np.exp(-a*pow(t,3))) + c2*(1-np.exp(-a*pow(t,3)))*np.sin(omega*t),
+            3*a*c1*pow(t,2)*np.exp(-a*pow(t,3)) - c2*omega*np.cos(t*omega)*(np.exp(-a*pow(t,3)) - 1) + 3*a*c2*pow(t,2)*np.exp(-a*pow(t,3))*np.sin(t*omega),
+            np.exp(-a*pow(t,3))*(c2*pow(omega,2)*np.sin(t*omega) - 9*pow(a,2)*c1*pow(t,4) + 6*a*c1*t - 9*pow(a,2)*c2*pow(t,4)*np.sin(t*omega) - c2*pow(omega,2)*np.exp(a*pow(t,3))*np.sin(t*omega) + 6*a*c2*t*np.sin(t*omega) + 6*a*c2*pow(t,2)*omega*np.cos(t*omega))
+        )
+
+    def __call__(self, n, t):
+
+        q_d = np.ndarray((n))
+        qd_d = np.ndarray((n))
+        qdd_d = np.ndarray((n))
+
+        #overflow inversion
+        dec = math.floor(t / ExcitingTrajectory.MAGIC_OVERFLOW) & 1
+        rem = t % ExcitingTrajectory.MAGIC_OVERFLOW
+        if t > ExcitingTrajectory.MAGIC_OVERFLOW:
+            t = ExcitingTrajectory.MAGIC_OVERFLOW-rem if dec else rem
+
+        
+        for i,f in enumerate(self.functions):
+            q,qd,qdd = f(t)
+            q_d[i] = q; qd_d[i] = qd; qdd_d[i] = qdd
+        
+        return q_d, qd_d, qdd_d
+
 class Profiler():
     logger = dict()
     meantimes = dict()
@@ -113,8 +144,8 @@ def checkGains(dynamicModel, robot, kp, kd):
     
     n = len(robot.links)
 
-    M = sympy.Matrix(dynamicModel.evaluateMatrixPi(dynamicModel.M))
-    g = sympy.Matrix(dynamicModel.evaluateMatrixPi(dynamicModel.g))      
+    M = sympy.Matrix(dynamicModel.evaluateMatrixPi(dynamicModel.M, robot.pi))
+    g = sympy.Matrix(dynamicModel.evaluateMatrixPi(dynamicModel.g, robot.pi))      
     q = sym.symbol(f"q(1:{n+1})")  # link variables
     candidates = [0, pi/2, pi, 3/2*pi]
     tmp_cand = np.repeat([candidates],n,axis=0)

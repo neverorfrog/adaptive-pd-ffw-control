@@ -66,6 +66,7 @@ class TestAdaptive_FFW(TrajectoryControl):
         torque = np.clip(torque, -self.u_bound, self.u_bound)
         self.append(q_d,qd_d,qdd_d,torque)
 
+
         gainMatrix = np.eye(len(self.robot.pi)) * 0.1
         sat_e = np.array([sat(el) for el in e], dtype=np.float64)
         deltaPi = gainMatrix @ (Y.T @ (sat_e + ed))
@@ -74,6 +75,25 @@ class TestAdaptive_FFW(TrajectoryControl):
         self.append(q_d,qd_d,qdd_d,[1,1])
 
         self.convergency |= arrived
+
+
+        myY = self.dynamicModel.Y
+
+        q_sym = sym.symbol(f"q(1:{self.dynamicModel.n+1})") 
+        qd_sym = sym.symbol(f"q_dot_(1:{self.dynamicModel.n+1})")
+        qdd_sym = sym.symbol(f"q_dot_dot_(1:{self.dynamicModel.n+1})")
+        qd_S_sym = sym.symbol(f"q_dot_S_(1:{self.dynamicModel.n+1})")
+
+        #print(myY[0][0])
+        #vars = q_sym + qd_sym + qdd_sym + qd_S_sym
+        
+        pol = sympy.Poly(myY[0][0])
+        print(myY[0][0])
+        print()
+        print(pol)
+        print(pol.coeffs())
+
+        exit(0)
 
         return torque, arrived or self.t[-1]/2 > self.reference.T + 1
     

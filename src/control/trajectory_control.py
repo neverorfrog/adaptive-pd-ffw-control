@@ -9,8 +9,6 @@ from tools.utils import *
 from roboticstoolbox.backends.PyPlot import PyPlot
 from math import pi
 from roboticstoolbox.tools.trajectory import *
-import spatialmath.base.symbolic as sym
-
 
 class TrajectoryControl(Control):
     def __init__(self, robot=None, env=None, model = None, plotting = True):
@@ -37,6 +35,10 @@ class TrajectoryControl(Control):
         self.qdd_d.append(np.array(qdd_d))
         self.u.append(torque)
         self.t.append(self.t[-1] + self.dt)
+
+    def logParameters(self, piError):
+        self.epi.append(piError)
+
         
     def check_termination(self, e, ed):
         # Termination condition check

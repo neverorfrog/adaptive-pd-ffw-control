@@ -29,6 +29,7 @@ class Control():
         self.qd = [np.array(self.robot.qd)]
         self.qdd = [np.array(self.robot.qdd)]
         self.t = [0]
+        self.epi = list()
          
           
     def apply(self, signal) -> None:
@@ -44,9 +45,11 @@ class Control():
             self.q_d = [q_d]
             self.qd_d = [qd_d]
             self.qdd_d = [qdd_d]
+            if hasattr(reference, "goal"):
+                self.goal = reference.goal
 
         self.threshold = threshold
-        self.goal = reference.goal
+        
             
     def setK(self, kp = None, kd = None):
         if kp is not None:
@@ -85,6 +88,8 @@ class Control():
     def plot(self):        
         fig, axs = plt.subplots(self.robot.n, 3, sharey="col", sharex = True)# a figure with a nx3 grid of Axes
         fig2, axs2 = plt.subplots(self.robot.n, 3, sharey="col", sharex = True)
+        fig3, axs3 = plt.subplots(1, 1)
+
                 
         q = np.array(self.q)
         qd = np.array(self.qd)
@@ -118,6 +123,8 @@ class Control():
             axs2[i,0].plot(self.t, u[:,i], lw = 2, color = "green")            
             axs2[i,1].plot(self.t, e[:,i], lw = 2, color = "black")
             axs2[i,2].plot(self.t, ed[:,i], lw = 2, color = "black")
+
+        axs3.plot(self.t[1:], self.epi, lw=2, color="black")
             
         plt.show(block = True) 
           
