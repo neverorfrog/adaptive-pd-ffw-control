@@ -31,6 +31,7 @@ class EulerLagrange():
             self.kindices = np.load(open(os.path.join(path,"kindices.npy"),"rb"), allow_pickle=True)
             self.p = np.load(open(os.path.join(path,"p.npy"),"rb"), allow_pickle=True)
             self.Y = sympy.Matrix(np.load(open(os.path.join(path,"Y.npy"),"rb"), allow_pickle=True))
+            self.lambdY = sympy.lambdify([q,q_d,q_d_S,q_d_d], self.Y, "numpy")
             self.robot.pi = np.delete(self.robot.pi, self.rindices)
             self.robot.realpi = np.delete(self.robot.realpi, self.rindices) 
         else:
@@ -42,6 +43,8 @@ class EulerLagrange():
         # link variables
         q = sym.symbol(f"q(1:{n+1})") 
         q_d = sym.symbol(f"q_dot_(1:{n+1})")
+        q_d_S = sym.symbol(f"q_dot_S_(1:{self.n+1})")
+        q_d_d = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
 
         #Kinetic and Potential energy
         Profiler.start("Moving Frames")
@@ -60,6 +63,7 @@ class EulerLagrange():
         
         Profiler.start("Regressor Matrix")
         self.Y = self.computeMinimalParametrization()
+        self.lambdY = sympy.lambdify([q,q_d,q_d_S,q_d_d], self.Y, "numpy")
         Profiler.stop()
 
         if(self.path):
@@ -230,7 +234,7 @@ class EulerLagrange():
         return mat.xreplace(d).evalf()
     
     def evaluateY(self, q, qd, qd_S, qdd):
-        return self.evaluateMatrix(self.Y, q, qd, qd_S, qdd)
+        return self.lambdY(q,qd,qd_S,qdd)
     
     def getChristoffel(self,k, evaluateReal = False):
         n = self.n
