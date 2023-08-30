@@ -19,6 +19,10 @@ class EulerLagrange():
         self.robot = robot
         self.n = len(robot.links)
         self.pi = sym.symbol(f"pi_(1:{10*self.n+1})")
+        q = sym.symbol(f"q(1:{self.n+1})") 
+        q_d = sym.symbol(f"q_dot_(1:{self.n+1})")
+        q_d_S = sym.symbol(f"q_dot_S_(1:{self.n+1})")
+        q_d_d = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
         self.path = path
         self.planar = planar
         
@@ -31,6 +35,7 @@ class EulerLagrange():
             self.kindices = np.load(open(os.path.join(path,"kindices.npy"),"rb"), allow_pickle=True)
             self.p = np.load(open(os.path.join(path,"p.npy"),"rb"), allow_pickle=True)
             self.Y = sympy.Matrix(np.load(open(os.path.join(path,"Y.npy"),"rb"), allow_pickle=True))
+            self.Y = sympy.Matrix(self.Y)
             self.lambdY = sympy.lambdify([q,q_d,q_d_S,q_d_d], self.Y, "numpy")
             self.robot.pi = np.delete(self.robot.pi, self.rindices)
             self.robot.realpi = np.delete(self.robot.realpi, self.rindices) 
@@ -63,6 +68,7 @@ class EulerLagrange():
         
         Profiler.start("Regressor Matrix")
         self.Y = self.computeMinimalParametrization()
+        self.Y = sympy.Matrix(self.Y)
         self.lambdY = sympy.lambdify([q,q_d,q_d_S,q_d_d], self.Y, "numpy")
         Profiler.stop()
 
