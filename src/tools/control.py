@@ -60,29 +60,44 @@ class Control():
     def setdt(self, dt):
         self.dt = dt
         
-    def simulate(self, dt = None, epochs = None) -> None: 
-        
+    def simulate(self, dt = None, T = None) -> None: 
+        assert(self.reference is not None)
         #Simulation time interval
         if dt is not None: 
             self.dt = dt 
         else:
             self.dt = 0.02
             
-        if epochs is None:
-            epochs = float('inf')
+        self.T = self.reference.T if T is None else T
+        self.forced_termination = True if T is not None else False
         
         arrived = False
-        self.i = 0
         while True:
-            if arrived or self.i == epochs: break
+            if arrived: break
             signal, arrived = self.feedback()
-            self.i += 1
             self.apply(signal)
             if self.plotting:
                 self.env.step(self.dt)
             else:
                 for i in range(self.robot.n):
                     self.robot.q[i] += self.robot.qd[i] * (dt)
+                    
+    def append(self):
+        self.q.append(np.array(self.robot.q))
+        self.qd.append(np.array(self.robot.qd))
+        self.qdd.append(np.array(self.robot.qdd))
+        self.t.append(self.t[-1] + self.dt)
+        
+    def check_termination(self, e, ed):
+        # Termination condition check
+        e = np.abs(e)
+        ed = np.abs(ed)
+
+        position_ok = all(e < self.threshold) == True
+        velocity_ok = all(ed < self.threshold) == True
+        time_ok = self.t[-1] >= self.T
+        if self.forced_termination: return time_ok
+        return time_ok and position_ok and velocity_ok
                 
                 
     def plot(self):        
@@ -104,8 +119,7 @@ class Control():
         fig.suptitle("Joint data in function of time")
         axs[0,0].set_title("q")
         axs[0,1].set_title("q_dot")
-        axs[0,2].set_title("q_dot_dot")
-        
+        axs[0,2].set_title("q_dot_dot")                     
         axs2[0,0].set_title("u")
         axs2[0,1].set_title("error on q")
         axs2[0,2].set_title("error q_dot")
@@ -120,7 +134,7 @@ class Control():
             axs[i,1].plot(self.t, qd_d[:,i], lw = 2, color = "blue")
             axs[i,2].plot(self.t, qdd_d[:,i], lw = 2, color = "blue")
             
-            axs2[i,0].plot(self.t, u[:,i], lw = 2, color = "green")            
+            axs2[i,0].plot(self.t[:-1], u[:,i], lw = 2, color = "green")            
             axs2[i,1].plot(self.t, e[:,i], lw = 2, color = "black")
             axs2[i,2].plot(self.t, ed[:,i], lw = 2, color = "black")
 

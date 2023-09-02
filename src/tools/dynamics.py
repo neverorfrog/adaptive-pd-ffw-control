@@ -8,11 +8,12 @@ from sympy import trigsimp, expand, nsimplify, evalf
 from math import pi
 from operator import itemgetter
 from math import sin, cos
+from sympy import lambdify
 
 
 class EulerLagrange():
 
-    def __init__(self, robot, path = None, planar = False):
+    def __init__(self, robot, path = None, planar = False, loadpi = False):
         '''
         pi for dynamic parameters that we believe are ground truth
         '''
@@ -25,6 +26,11 @@ class EulerLagrange():
         q_d_d = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
         self.path = path
         self.planar = planar
+        n = self.n
+        q = sym.symbol(f"q(1:{n+1})") 
+        q_d = sym.symbol(f"q_dot_(1:{n+1})")
+        q_d_S = sym.symbol(f"q_dot_S_(1:{self.n+1})")
+        q_d_d = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
         
         if path and os.path.isdir(path):
             print("Dynamic model cache found. Loading model...")
@@ -37,7 +43,10 @@ class EulerLagrange():
             self.Y = sympy.Matrix(np.load(open(os.path.join(path,"Y.npy"),"rb"), allow_pickle=True))
             self.Y = sympy.Matrix(self.Y)
             self.lambdY = sympy.lambdify([q,q_d,q_d_S,q_d_d], self.Y, "numpy")
-            self.robot.pi = np.delete(self.robot.pi, self.rindices)
+            if loadpi:
+                self.robot.pi = np.load(open(os.path.join(path,"pi.npy"),"rb"), allow_pickle=True)
+            else:
+                self.robot.pi = np.delete(self.robot.pi, self.rindices)
             self.robot.realpi = np.delete(self.robot.realpi, self.rindices) 
         else:
             self.init()
@@ -128,13 +137,13 @@ class EulerLagrange():
             C_temp = M[:,i].jacobian(q)
             C = 0.5 * (C_temp + C_temp.T - M.diff(q[i]))
             S[i] = np.matmul(q_d, C)
-            g[i] = -U.diff(q[i])
+            g[i] = U.diff(q[i])
         return S, g
     
                 
     def movingFrames(self, robot):
         n = self.n
-        gv = np.array([0, 9.81, 0]) if self.planar else np.array([0, 0, 9.81])
+        gv = np.array([0, -9.81, 0]) if self.planar else np.array([0, 0, -9.81])
         ri = np.full((3,), sym.zero(), dtype = object) #vector from RF i-1 to i wrt RF i-1
         Rinv = np.full((3,3), sym.zero(), dtype = object) #ith matrix representing rotation from Rf i to Rf i-1
         iwi = np.full((3,), sym.zero(), dtype = object) #angular velocity of link i wrt RF i
@@ -146,35 +155,35 @@ class EulerLagrange():
         q = sym.symbol(f"q(1:{n+1})")  # link variables
         q_d = sym.symbol(f"q_dot_(1:{n+1})")
         
-        for i in range(n):            
+        for i in range(n):    
             offset = 10*i
             sigma = int(robot.links[i].isprismatic) #check for prismatic joints
-            A = robot[i].A(q[i]) #homogeneus transformation from frame i to i+1            
+            A = robot[i].A(q[i]) #homogeneus transformation from frame i to i+1
             ri = (A.t)
             Ainv = A.inv()
             Rinv = (Ainv.R) #rotation from frame i+1 to i
-                                                    
+            
             #Kinetic Energy
             im1wi = iwi + (1-sigma) * q_d[i] * np.array([0,0,1]) #omega of link i wrt RF i-1 (3 x 1) 
-            iwi = trigsimp( nsimplify(Rinv @ im1wi, tolerance = 1e-6, rational = True) )
+            iwi = nsimplify(Rinv @ im1wi, rational = True) 
             im1vi = ivi + sigma * q_d[i] * np.array([0,0,1]) + np.cross(im1wi, ri) #linear v of link i wrt RF i-1
-            ivi = trigsimp( nsimplify(Rinv @ im1vi, tolerance = 1e-6, rational = True) )
+            ivi = nsimplify(Rinv @ im1vi, rational = True) 
             mirci = np.array(self.pi[offset+1:offset+4])
             I_link = np.array([[self.pi[offset+4], self.pi[offset+5], self.pi[offset+6]],
                                [self.pi[offset+5], self.pi[offset+7], self.pi[offset+8]],
                                [self.pi[offset+6], self.pi[offset+8], self.pi[offset+9]]])
             
-            first = trigsimp( 0.5 * self.pi[offset+0] * nsimplify(np.matmul(ivi,ivi).evalf(), tolerance = 1e-6, rational = True) )
-            second = trigsimp( nsimplify( np.matmul(np.matmul(mirci, skew(ivi)), iwi).evalf() , tolerance = 1e-6, rational = True) )
-            third = trigsimp( 0.5 * np.matmul(np.matmul(iwi, I_link), iwi) )
+            first = 0.5 * self.pi[offset+0] * nsimplify(np.matmul(ivi,ivi).evalf(), rational = True) 
+            second = nsimplify( np.matmul(np.matmul(mirci, skew(ivi)), iwi).evalf() , rational = True) 
+            third = 0.5 * np.matmul(np.matmul(iwi, I_link), iwi) 
             
-            Ti = trigsimp( first + second  + third )
-            T = trigsimp(T + Ti)
+            Ti = first + second  + third 
+            T = T + Ti
                    
             #Potential Energy
             rot0i = robot.A(i,q).R #transformation from RF 0 to RF i+1
             r0i = robot.A(i,q).t
-            Ui = -self.pi[offset+0]*np.matmul(gv,r0i) - np.matmul(gv, np.matmul(rot0i,mirci))
+            Ui = -self.pi[offset+0]*np.matmul(gv,r0i) -np.matmul(gv, np.matmul(rot0i,mirci))
             U = U + Ui
             
         return T,U 
@@ -261,24 +270,26 @@ class EulerLagrange():
 
 if __name__ == "__main__":
     robot = ParametrizedRobot(Polar2R())
-    model = EulerLagrange(robot, os.path.join("src/models",robot.name))
+    model = EulerLagrange(robot)   
+    Profiler.print()     
     
-    q = [pi/2,pi/2]
+    q = [0,0]
     qd = [0.3,0]
     qdd = [-0.1,0]
     
+    print("STARTING EVALUATION")
     Profiler.start("EVALUATION")
-    my_M = model.inertia(q)
+    my_M = model.inertia(q, evaluateReal = True)
     c_M = robot.inertia(q)   
     print(f"ERROR M: {my_M - c_M}")
     print(f"ERROR NORM: {(my_M-c_M).norm()}")
     
-    my = model.coriolis(q,qd)
+    my = model.coriolis(q,qd, evaluateReal = True)
     c = robot.coriolis(q,qd)   
     print(f"ERROR S: {my - c}")
     print(f"ERROR NORM: {(my-c).norm()}")
     
-    my = model.gravity(q)
+    my = model.gravity(q, evaluateReal = True)
     c = robot.gravload(q).reshape(-1,1)  
     print(f"MY g: {my}")
     print(f"CORKE g: {c}")

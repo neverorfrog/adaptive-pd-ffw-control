@@ -13,44 +13,39 @@ from roboticstoolbox.tools.trajectory import *
 class TrajectoryControl(Control):
     def __init__(self, robot=None, env=None, model = None, plotting = True):
         super().__init__(robot, env, plotting)
-        self.gravity = np.array([0,9.81,0]) if model.planar else np.array([0,0,9.81])
-        self.u = [robot.gravload(self.robot.q, self.gravity)]
+        self.gravity = np.array([0,-9.81,0]) if model.planar else np.array([0,0,-9.81])
+        self.u = []
         
     def apply(self, torque) -> None:
-        #numerical integration (runge kutta 2)
-        qd2 = self.robot.qd + (self.dt/2)*self.robot.qdd; 
+        #numerical integration (runge kutta 4)
+        Profiler.start("Numerical Integration")
+        qdd1 = self.robot.qdd
+        qd2 = self.robot.qd + (self.dt/2)*qdd1
         q2 = self.robot.q + self.dt/2*qd2
         qdd2 = self.robot.accel(q2,qd2, torque, gravity = self.gravity)
-        self.robot.qd = self.robot.qd + self.dt*qdd2
+        qd3 = qd2 + (self.dt/2) * qdd2
+        q3 = q2 + self.dt/2*qd3
+        qdd3 = self.robot.accel(q3,qd3, torque, gravity = self.gravity)
+        qd4 = qd3 + (self.dt/2) * qdd3
+        q4 = q3 + self.dt/2*qd4
+        qdd4 = self.robot.accel(q4,qd4, torque, gravity = self.gravity)
+        self.robot.qd = self.robot.qd + self.dt*(1/6*(qdd1 + 2*qdd2 + 2*qdd3 + qdd4))
+        Profiler.stop()
         
         #next step
         self.robot.qdd = self.robot.accel(self.robot.q,self.robot.qd, torque, gravity = self.gravity)
         
     def append(self,q_d,qd_d,qdd_d,torque):
-        self.q.append(np.array(self.robot.q))
-        self.qd.append(np.array(self.robot.qd))
-        self.qdd.append(np.array(self.robot.qdd))
+        super().append()
         self.q_d.append(np.array(q_d))
         self.qd_d.append(np.array(qd_d))
         self.qdd_d.append(np.array(qdd_d))
         self.u.append(torque)
-        self.t.append(self.t[-1] + self.dt)
 
     def logParameters(self, piError):
         self.epi.append(piError)
 
-        
-    def check_termination(self, e, ed):
-        # Termination condition check
-        e = np.abs(e)
-        ed = np.abs(ed)
-
-        position_ok = all(e < self.threshold) == True
-        velocity_ok = all(ed < self.threshold) == True
-        return self.t[-1] >= self.reference.T and position_ok and velocity_ok
-        
-        
-
+   
 class Feedforward(TrajectoryControl):
 
     def __init__(self, robot=None, env=None, gravity=[0,0,0]):
