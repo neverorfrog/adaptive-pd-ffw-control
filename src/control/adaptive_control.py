@@ -1,9 +1,6 @@
 import numpy as np
-from math import sin, cos
 from roboticstoolbox.backends.PyPlot import PyPlot
-from roboticstoolbox.backends.swift import Swift
 from tools.robots import *
-from math import isnan
 from roboticstoolbox.tools.trajectory import *
 from tools.utils import *
 from control.trajectory_control import TrajectoryControl
@@ -65,7 +62,9 @@ class Adaptive_FFW(TrajectoryControl):
         Y = self.dynamicModel.evaluateY(q_d, qd_d, qd_d, qdd_d)
         Profiler.stop()
         Profiler.start("Torque")
-        torque = np.matmul(self.kp,e) + np.matmul(self.kd,ed) + np.matmul(Y, self.robot.pi).astype(np.float64)
+        torque_my = np.matmul(self.kp,e) + np.matmul(self.kd,ed) + np.matmul(Y, self.robot.realpi).astype(np.float64)
+        torque = np.matmul(self.kp,e) + np.matmul(self.kd,ed) + robot.inertia(q_d) @ qdd_d + robot.coriolis(q_d, qd_d) @ qd_d + robot.gravload(q_d, gravity = [0,0,-9.81])
+        print(f"ERROR NORM u: {np.linalg.norm(torque_my-torque)}")
         torque = np.clip(torque, -self.u_bound, self.u_bound)
         epi = np.linalg.norm((self.robot.pi - self.robot.realpi).astype(np.float64))
         Profiler.stop()
@@ -86,19 +85,19 @@ class Adaptive_FFW(TrajectoryControl):
 if __name__ == "__main__":
     
     for i in range(1):
-        robot = ParametrizedRobot(Polar2R(), stddev = 0)
-        # model = EulerLagrange(robot, path = os.path.join("src/models",robot.name), loadpi = False) 
-        model = EulerLagrange(robot) 
+        robot = ParametrizedRobot(Puma560(), stddev = 0)
+        model = EulerLagrange(robot, path = os.path.join("src/models",robot.name), loadpi = False) 
+        # model = EulerLagrange(robot) 
         
         # traj = ClippedTrajectory(robot.q, [pi/2,pi/4], 6)
-        # traj = ClippedTrajectory(robot.q, robot.q, 6)
+        traj = ClippedTrajectory(robot.q, robot.q + pi/8, 6)
         # traj = ClippedTrajectory([pi/3,pi/4], [-pi/2,-pi/6], 4)
-        traj = ExcitingTrajectory([[0.5,0.5,0.5,1],[0.8,0.8,0.8,1.2]])
+        # traj = ExcitingTrajectory([[0.5,0.5,0.5,1],[0.8,0.8,0.8,1.2]])
         
         loop = Adaptive_FFW(robot, PyPlot(), model, plotting = False)
         # loop = Adaptive_Facile(robot, PyPlot(), model, plotting = False)
         loop.setR(reference = traj, threshold = 0.05)
-        loop.setK(kp = [200,100], kd = [60,30])
+        loop.setK(kp = [0,0,0,0,0,0], kd = [0,0,0,0,0,0])
         loop.simulate(dt = 0.01, T = 6)
         # np.save(open(os.path.join(os.path.join("src/models",robot.name),"pi.npy"), "wb"), robot.pi)
         Profiler.mean()

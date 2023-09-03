@@ -1,4 +1,3 @@
-import os
 from roboticstoolbox import *
 import spatialmath.base.symbolic as sym
 import numpy as np
@@ -271,7 +270,57 @@ class SCARA(DHRobot):
 
         self.addconfiguration("qr", self.qr)
         self.addconfiguration("qg", self.qg)
+ 
+class UR3(DHRobot):
+    """
+    Class that models a Universal Robotics UR3 manipulator
+    """ 
+
+    def __init__(self):
+
+
+        from math import pi
+        zero = 0.0
+        deg = pi / 180
+
+        # robot length values (metres)
+        a = [0, -0.24365, -0.21325, 0, 0, 0]
+        d = [0.1519, 0, 0, 0.11235, 0.08535, 0.0819]
         
+        #link twists
+        alpha = [pi / 2, zero, zero, pi / 2, -pi / 2, zero]
+
+        # mass data, no inertia available
+        mass = [2, 3.42, 1.26, 0.8, 0.8, 0.35]
+        coms = [
+            [0, -0.02, 0],
+            [0.13, 0, 0.1157],
+            [0.05, 0, 0.0238],
+            [0, 0, 0.01],
+            [0, 0, 0.01],
+            [0, 0, -0.02],
+        ]
+        I_link = [0,0,0,0,0,0]
+        links = []
+
+        for j in range(6):
+            link = RevoluteDH(
+                d=d[j], a=a[j], alpha=alpha[j], m=mass[j], r=coms[j], I = I_link
+            )
+            links.append(link)
+
+        super().__init__(
+            links,
+            name="UR3",
+            manufacturer="Universal Robotics",
+            keywords=("dynamics", "symbolic")
+        )
+
+        self.qr = np.array([180, 90, 0, 45, 90, 0]) * deg
+        self.qz = np.zeros(6)
+        self.addconfiguration("qr", self.qr)
+        self.addconfiguration("qz", self.qz)
+    
         
 class Panda(DHRobot):
     
@@ -401,7 +450,7 @@ class Puma560(DHRobot):
 
         super().__init__(
             L,
-            name="Puma 560",
+            name="Puma560",
             manufacturer="Unimation",
             keywords=("dynamics", "symbolic", "mesh"),
             symbolic=symbolic,
@@ -511,101 +560,3 @@ class HeadlessPuma560(DHRobot):
 
         # straight and horizontal
         self.addconfiguration_attr("qs", np.array([0, 0, -pi / 2, 0]))
-
-
-
-
-# class KUKALWR(DHRobot):
-#     """
-#     Class that models a KUKA LWR manipulator
-#     """ 
-
-#     def __init__(self):
-        
-#         from math import pi
-#         zero = 0.0
-#         deg = pi / 180
-#         inch = 0.0254
-
-#         L = [
-#             RevoluteDH( #zero frame is at the shoulder
-#                 d=0,  # link length (Denavit-Hartenberg notation)
-#                 a=0,  # link offset (Denavit-Hartenberg notation)
-#                 alpha = pi/2,  # link twist (Dennavit-Hartenberg notation)
-#                 I=[0, -0.35, 0, 0, 0, 0],
-#                 # inertia tensor of link with respect to
-#                 # center of mass I = [L_xx, L_yy, L_zz,
-#                 # L_xy, L_yz, L_xz]
-#                 r=[0, 0, 0],
-#                 # distance of ith origin to center of mass [x,y,z]
-#                 # in link reference frame
-#                 m=0,  # mass of link
-#                 qlim=[-160 * deg, 160 * deg],  # minimum and maximum joint angle
-#             ),
-#             RevoluteDH(
-#                 d=0,
-#                 a=0,
-#                 alpha = -pi/2,
-#                 I=[0.13, 0.524, 0.539, 0, 0, 0],
-#                 r=[-0.3638, 0.006, 0.2275],
-#                 m=17.4,
-#                 qlim=[-110 * deg, 110 * deg],  # qlim=[-45*deg, 225*deg]
-#             ),
-#             RevoluteDH(
-#                 d=0.4,
-#                 a=0,
-#                 alpha= -pi/2,
-#                 I=[0.066, 0.086, 0.0125, 0, 0, 0],
-#                 r=[-0.0203, -0.0141, 0.070],
-#                 m=4.8,
-#                 qlim=[-135 * deg, 135 * deg],  # qlim=[-225*deg, 45*deg]
-#             ),
-#             RevoluteDH(
-#                 d=0,
-#                 a=0,
-#                 alpha = pi/2,
-#                 I=[1.8e-3, 1.3e-3, 1.8e-3, 0, 0, 0],
-#                 r=[0, 0.019, 0],
-#                 m=0.82,
-#                 qlim=[-266 * deg, 266 * deg],  # qlim=[-110*deg, 170*deg]
-#             ),
-#             RevoluteDH(
-#                 d=0.39,
-#                 a=0,
-#                 alpha= pi/2,
-#                 I=[0.3e-3, 0.4e-3, 0.3e-3, 0, 0, 0],
-#                 r=[0, 0, 0],
-#                 m=0.34,
-#                 qlim=[-100 * deg, 100 * deg],
-#             ),
-#             RevoluteDH(
-#                 d=0,
-#                 a=0,
-#                 alpha=zero,
-#                 I=[0.15e-3, 0.15e-3, 0.04e-3, 0, 0, 0],
-#                 r=[0, 0, 0.032],
-#                 m=0.09,
-#                 qlim=[-266 * deg, 266 * deg],
-#             ),
-#         ]
-
-#         super().__init__(
-#             L,
-#             name="Puma 560",
-#             manufacturer="Unimation",
-#             keywords=("dynamics", "symbolic", "mesh"),
-#             meshdir="meshes/UNIMATE/puma560",
-#         )
-
-#         self.qr = np.array([0, pi / 2, -pi / 2, 0, 0, 0])
-#         self.qz = np.zeros(6)
-
-#         # nominal table top picking pose
-#         self.qn = np.array([0, pi / 4, pi, 0, pi / 4, 0])
-
-#         self.addconfiguration("qr", self.qr)
-#         self.addconfiguration("qz", self.qz)
-#         self.addconfiguration("qn", self.qn)
-
-#         # straight and horizontal
-#         self.addconfiguration_attr("qs", np.array([0, 0, -pi / 2, 0, 0, 0]))

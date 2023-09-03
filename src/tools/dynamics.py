@@ -1,14 +1,11 @@
 import numpy as np
 import spatialmath.base.symbolic as sym
 import sympy
-from tools.utils import skew, Profiler, efficient_coeff_dict, index2var
+from tools.utils import skew, Profiler
 from tools.robots import *
 import os
-from sympy import trigsimp, expand, nsimplify, evalf
-from math import pi
-from operator import itemgetter
+from sympy import trigsimp, nsimplify
 from math import sin, cos
-from sympy import lambdify
 
 
 class EulerLagrange():
@@ -101,7 +98,7 @@ class EulerLagrange():
         self.kindices = [] #the ones of the columns to keep
         self.rindices = [] #the ones of the columns to remove
         for i in range(n*10):
-            if np.array(Y[:,i] == sympy.zeros(n,1)): 
+            if (np.array(Y[:,i]) == np.zeros((n,1))).all(): 
                 self.rindices.append(i)
             else:
                 linksection = int(i/10)
@@ -165,17 +162,17 @@ class EulerLagrange():
             
             #Kinetic Energy
             im1wi = iwi + (1-sigma) * q_d[i] * np.array([0,0,1]) #omega of link i wrt RF i-1 (3 x 1) 
-            iwi = nsimplify(Rinv @ im1wi, rational = True) 
+            iwi = trigsimp(nsimplify(Rinv @ im1wi, tolerance = 1e-10, rational = True))
             im1vi = ivi + sigma * q_d[i] * np.array([0,0,1]) + np.cross(im1wi, ri) #linear v of link i wrt RF i-1
-            ivi = nsimplify(Rinv @ im1vi, rational = True) 
+            ivi = trigsimp(nsimplify(Rinv @ im1vi, tolerance = 1e-10, rational = True))
             mirci = np.array(self.pi[offset+1:offset+4])
             I_link = np.array([[self.pi[offset+4], self.pi[offset+5], self.pi[offset+6]],
                                [self.pi[offset+5], self.pi[offset+7], self.pi[offset+8]],
                                [self.pi[offset+6], self.pi[offset+8], self.pi[offset+9]]])
             
-            first = 0.5 * self.pi[offset+0] * nsimplify(np.matmul(ivi,ivi).evalf(), rational = True) 
-            second = nsimplify( np.matmul(np.matmul(mirci, skew(ivi)), iwi).evalf() , rational = True) 
-            third = 0.5 * np.matmul(np.matmul(iwi, I_link), iwi) 
+            first = trigsimp(0.5 * self.pi[offset+0] * nsimplify(np.matmul(ivi,ivi).evalf(), tolerance = 1e-10, rational = True))
+            second = trigsimp(nsimplify(np.matmul(np.matmul(mirci, skew(ivi)), iwi).evalf() , tolerance = 1e-10, rational = True))
+            third = trigsimp(0.5 * np.matmul(np.matmul(iwi, I_link), iwi))
             
             Ti = first + second  + third 
             T = T + Ti
@@ -269,33 +266,30 @@ class EulerLagrange():
     
 
 if __name__ == "__main__":
-    robot = ParametrizedRobot(Polar2R())
-    model = EulerLagrange(robot)   
-    Profiler.print()     
-    
-    q = [0,0]
-    qd = [0.3,0]
-    qdd = [-0.1,0]
+    robot = ParametrizedRobot(Puma560())
+    model = EulerLagrange(robot, path = os.path.join("src/models",robot.name))   
+    Profiler.print()  
+    n = len(robot.links)
+    q = np.random.rand(n) 
+    qd = np.random.rand(n)
+    qdd = np.random.rand(n)
     
     print("STARTING EVALUATION")
     Profiler.start("EVALUATION")
     my_M = model.inertia(q, evaluateReal = True)
     c_M = robot.inertia(q)   
-    print(f"ERROR M: {my_M - c_M}")
-    print(f"ERROR NORM: {(my_M-c_M).norm()}")
+    print(f"ERROR NORM M: {(my_M-c_M).norm()}")
     
     my = model.coriolis(q,qd, evaluateReal = True)
     c = robot.coriolis(q,qd)   
-    print(f"ERROR S: {my - c}")
-    print(f"ERROR NORM: {(my-c).norm()}")
+    print(f"ERROR NORM S: {(my-c).norm()}")
     
     my = model.gravity(q, evaluateReal = True)
     c = robot.gravload(q).reshape(-1,1)  
-    print(f"MY g: {my}")
-    print(f"CORKE g: {c}")
-    print(f"ERROR NORM: {(my-c).norm()}")
-                            
-    print(f"MY u: {model.evaluateY(q,qd,qd,qdd) @ robot.realpi}")
-    print(f"CORKE u: {robot.inertia(q) @ qdd + robot.coriolis(q, qd) @ qd + robot.gravload(q, gravity = [0,0,-9.81])}")
+    print(f"ERROR NORM g: {(my-c).norm()}")
+              
+    my = model.evaluateY(q,qd,qd,qdd) @ robot.realpi  
+    corke = robot.inertia(q) @ qdd + robot.coriolis(q, qd) @ qd + robot.gravload(q, gravity = [0,0,-9.81])       
+    print(f"ERROR NORM u: {np.linalg.norm(my-corke)}")
     Profiler.stop()
     Profiler.print()
