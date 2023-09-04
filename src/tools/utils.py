@@ -35,9 +35,10 @@ class ClippedTrajectory():
 
 class ExcitingTrajectory():
     MAGIC_OVERFLOW = 7
-    def __init__(self, params) -> None:
+    def __init__(self, params, T) -> None:
         assert(len(params[0]) == 4)
         self.functions = [self.fz(el) for el in params]
+        self.T = T
 
     def fz(self, param):
         c1, a, c2, omega = param

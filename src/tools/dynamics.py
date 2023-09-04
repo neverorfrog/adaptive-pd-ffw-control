@@ -8,7 +8,6 @@ from sympy import trigsimp, expand, nsimplify, evalf
 from math import pi
 from operator import itemgetter
 from math import sin, cos
-from sympy import lambdify
 
 
 class EulerLagrange():
@@ -24,13 +23,9 @@ class EulerLagrange():
         q_d = sym.symbol(f"q_dot_(1:{self.n+1})")
         q_d_S = sym.symbol(f"q_dot_S_(1:{self.n+1})")
         q_d_d = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
+        n = self.n
         self.path = path
         self.planar = planar
-        n = self.n
-        q = sym.symbol(f"q(1:{n+1})") 
-        q_d = sym.symbol(f"q_dot_(1:{n+1})")
-        q_d_S = sym.symbol(f"q_dot_S_(1:{self.n+1})")
-        q_d_d = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
         
         if path and os.path.isdir(path):
             print("Dynamic model cache found. Loading model...")
@@ -155,26 +150,26 @@ class EulerLagrange():
         q = sym.symbol(f"q(1:{n+1})")  # link variables
         q_d = sym.symbol(f"q_dot_(1:{n+1})")
         
-        for i in range(n):    
+        for i in range(n):            
             offset = 10*i
             sigma = int(robot.links[i].isprismatic) #check for prismatic joints
-            A = robot[i].A(q[i]) #homogeneus transformation from frame i to i+1
+            A = robot[i].A(q[i]) #homogeneus transformation from frame i to i+1            
             ri = (A.t)
             Ainv = A.inv()
             Rinv = (Ainv.R) #rotation from frame i+1 to i
-            
+                                                    
             #Kinetic Energy
             im1wi = iwi + (1-sigma) * q_d[i] * np.array([0,0,1]) #omega of link i wrt RF i-1 (3 x 1) 
-            iwi = nsimplify(Rinv @ im1wi, rational = True) 
+            iwi = nsimplify(Rinv @ im1wi, tolerance = 1e-6, rational = True) 
             im1vi = ivi + sigma * q_d[i] * np.array([0,0,1]) + np.cross(im1wi, ri) #linear v of link i wrt RF i-1
-            ivi = nsimplify(Rinv @ im1vi, rational = True) 
+            ivi = nsimplify(Rinv @ im1vi, tolerance = 1e-6, rational = True) 
             mirci = np.array(self.pi[offset+1:offset+4])
             I_link = np.array([[self.pi[offset+4], self.pi[offset+5], self.pi[offset+6]],
                                [self.pi[offset+5], self.pi[offset+7], self.pi[offset+8]],
                                [self.pi[offset+6], self.pi[offset+8], self.pi[offset+9]]])
             
-            first = 0.5 * self.pi[offset+0] * nsimplify(np.matmul(ivi,ivi).evalf(), rational = True) 
-            second = nsimplify( np.matmul(np.matmul(mirci, skew(ivi)), iwi).evalf() , rational = True) 
+            first = 0.5 * self.pi[offset+0] * nsimplify(np.matmul(ivi,ivi).evalf(), tolerance = 1e-6, rational = True) 
+            second = nsimplify( np.matmul(np.matmul(mirci, skew(ivi)), iwi).evalf() , tolerance = 1e-6, rational = True) 
             third = 0.5 * np.matmul(np.matmul(iwi, I_link), iwi) 
             
             Ti = first + second  + third 
@@ -183,10 +178,10 @@ class EulerLagrange():
             #Potential Energy
             rot0i = robot.A(i,q).R #transformation from RF 0 to RF i+1
             r0i = robot.A(i,q).t
-            Ui = -self.pi[offset+0]*np.matmul(gv,r0i) -np.matmul(gv, np.matmul(rot0i,mirci))
+            Ui = -self.pi[offset+0]*np.matmul(gv,r0i) - np.matmul(gv, np.matmul(rot0i,mirci))
             U = U + Ui
             
-        return T,U 
+        return trigsimp(T),U 
     
     def getDynamics(self):
         qdd = sym.symbol(f"q_dot_dot_(1:{self.n+1})")
@@ -270,26 +265,24 @@ class EulerLagrange():
 
 if __name__ == "__main__":
     robot = ParametrizedRobot(Polar2R())
-    model = EulerLagrange(robot)   
-    Profiler.print()     
+    model = EulerLagrange(robot, os.path.join("src/models",robot.name))
     
-    q = [0,0]
+    q = [pi/2,pi/2]
     qd = [0.3,0]
     qdd = [-0.1,0]
     
-    print("STARTING EVALUATION")
     Profiler.start("EVALUATION")
-    my_M = model.inertia(q, evaluateReal = True)
+    my_M = model.inertia(q)
     c_M = robot.inertia(q)   
     print(f"ERROR M: {my_M - c_M}")
     print(f"ERROR NORM: {(my_M-c_M).norm()}")
     
-    my = model.coriolis(q,qd, evaluateReal = True)
+    my = model.coriolis(q,qd)
     c = robot.coriolis(q,qd)   
     print(f"ERROR S: {my - c}")
     print(f"ERROR NORM: {(my-c).norm()}")
     
-    my = model.gravity(q, evaluateReal = True)
+    my = model.gravity(q)
     c = robot.gravload(q).reshape(-1,1)  
     print(f"MY g: {my}")
     print(f"CORKE g: {c}")
