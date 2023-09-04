@@ -50,7 +50,10 @@ class Adaptive_FFW(TrajectoryControl):
 
         self.gainMatrix = np.eye(len(self.robot.pi)) * 25e-5
 
-        self.gainMatrix[30:60] *= 1e-5
+        self.gainMatrix[30:40] *= 1e-5
+        self.gainMatrix[40:50] *= 1e-6
+        self.gainMatrix[50:60] *= 1e-7
+
         
              
     def feedback(self):
@@ -104,7 +107,7 @@ class Adaptive_FFW(TrajectoryControl):
         print(f"TIME {self.t[-1]}")
         
         #return np.matmul(Y, self.robot.realpi).astype(np.float64), self.t[-1] > 5 or isnan(torque[0])
-        return torque, self.t[-1] > 5 or isnan(torque[0])
+        return torque, self.t[-1] > 7 or isnan(torque[0])
     
 if __name__ == "__main__":
     
@@ -116,7 +119,7 @@ if __name__ == "__main__":
 
     loop = Adaptive_FFW(robot, PyPlot(), model, plotting = False, u_bound = [2e2,2e2,2e2,2e2,2e2,2e2])
     loop.setR(reference = traj, threshold = 0.05)
-    loop.setK(kp=[30,30,10,5,2.8,1.3], kd = [2,2,2,0.1,0.001,0.001])
+    loop.setK(kp=[150,80,60,15,3,1.5], kd = [10,7,5,1,0.001,0.001])
         
     #checkGains(model, robot, loop.kp, loop.kd)
     

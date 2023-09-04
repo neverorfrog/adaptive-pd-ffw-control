@@ -25,9 +25,9 @@ class ParametrizedRobot(DHRobot):
             if i == 3:
                 coeff = 0.1
             if i == 4:
-                coeff = 0.01
+                coeff = 0.00001
             if i == 5:
-                coeff = 0.001
+                coeff = 0.00001
 
             real_I_link = robot.links[i].I + robot.links[i].m*np.matmul(skew(robot.links[i].r).T, skew(robot.links[i].r))
             real_mr = robot.links[i].m*robot.links[i].r 
