@@ -7,35 +7,27 @@ from tools.utils import skew
 
 class ParametrizedRobot(DHRobot):
     '''Takes a real robot and parametrizes its dynamic data (adding some noise if needed for adaptive control tests)'''
-    def __init__(self, realrobot, stddev = 1, seed = None):
+    def __init__(self, realrobot, max_parameters_error = 0.1, seed = None):
         np.random.seed(seed)
         robot = realrobot
         n = len(robot.links)
         self.realrobot = realrobot
-        super().__init__(robot.links, name=robot.name, gravity = robot.gravity)
-        
+        super().__init__(robot.links, name=robot.name, gravity = robot.gravity)        
         self.realpi = np.zeros(10*n) #real parameters
         self.pi = np.zeros(10*n) #the ones we believe are true
+
+        getRandomMultiplier = lambda x,n: np.random.uniform(1. - x,1. + x,(n,))
         
         for i in range(n):
             shift = 10*i
-
-            coeff = 1
-
-            if i == 3:
-                coeff = 0.1
-            if i == 4:
-                coeff = 0.00001
-            if i == 5:
-                coeff = 0.00001
 
             real_I_link = robot.links[i].I + robot.links[i].m*np.matmul(skew(robot.links[i].r).T, skew(robot.links[i].r))
             real_mr = robot.links[i].m*robot.links[i].r 
 
             #Computation of actual dynamic parameters of the belief robot
-            self.pi[shift+0] = max(0, robot.links[i].m + (np.random.normal(0, stddev, 1)) * coeff)
-            self.pi[shift+1:shift+4] = real_mr + (np.random.normal(0, stddev, (3,))*coeff)
-            self.pi[shift+4:shift+10] = np.maximum(real_I_link[np.triu_indices(3)], (np.random.normal(0, stddev, (6,))*coeff))
+            self.pi[shift+0] = robot.links[i].m * getRandomMultiplier(max_parameters_error, 1)
+            self.pi[shift+1:shift+4] = real_mr * getRandomMultiplier(max_parameters_error, 3)
+            self.pi[shift+4:shift+10] = real_I_link[np.triu_indices(3)] * getRandomMultiplier(max_parameters_error, 6)
             
             #Computation of actual dynamic parameters of the real robot (ground truth)
             self.realpi[shift+0] = robot.links[i].m 

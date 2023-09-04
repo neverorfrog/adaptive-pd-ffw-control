@@ -34,7 +34,7 @@ class ClippedTrajectory():
         return self.functions
 
 class ExcitingTrajectory():
-    MAGIC_OVERFLOW = 7
+    MAGIC_OVERFLOW = 6.7
     def __init__(self, params, T) -> None:
         assert(len(params[0]) == 4)
         self.functions = [self.fz(el) for el in params]

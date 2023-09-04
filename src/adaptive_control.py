@@ -43,19 +43,16 @@ class Adaptive_Facile(TrajectoryControl):
 
 class Adaptive_FFW(TrajectoryControl):
 
-    def __init__(self, robot = None, env = None, dynamicModel: EulerLagrange = None, plotting = True, u_bound = None):
+    def __init__(self, robot = None, env = None, dynamicModel: EulerLagrange = None, plotting = True, u_bound = None, gainMatrixMultiplier = 0.1):
         super().__init__(robot, env, dynamicModel, plotting)
         self.dynamicModel = dynamicModel
         self.u_bound = np.array(u_bound) if u_bound is not None else np.array([200]*len(robot.links))
+        assert(gainMatrixMultiplier < 1.)
 
-        self.gainMatrix = np.eye(len(self.robot.pi)) * 25e-5
-
-        self.gainMatrix[30:40] *= 1e-5
-        self.gainMatrix[40:50] *= 1e-6
-        self.gainMatrix[50:60] *= 1e-7
+        self.gainMatrix = np.diag(self.robot.pi)
+        self.gainMatrix *= gainMatrixMultiplier
 
         
-             
     def feedback(self):
         '''Computes the torque necessary to follow the reference trajectory'''
         #Feedback of the error
@@ -107,17 +104,17 @@ class Adaptive_FFW(TrajectoryControl):
         print(f"TIME {self.t[-1]}")
         
         #return np.matmul(Y, self.robot.realpi).astype(np.float64), self.t[-1] > 5 or isnan(torque[0])
-        return torque, self.t[-1] > 7 or isnan(torque[0])
+        return torque, self.t[-1] > 6.5 or isnan(torque[0])
     
 if __name__ == "__main__":
     
-    robot = ParametrizedRobot(UR3(), stddev = 8, seed=42)
+    robot = ParametrizedRobot(UR3(), max_parameters_error = 0.3, seed=42)
     model = EulerLagrange(robot ,os.path.join("src/models",robot.name)) 
     
-    traj = ExcitingTrajectory([[1.11,2.31,1.02,1.21],[2.1,1.11,1.032,1.25],[1.12,1.21,1.05,1.12],[1.05,1.06,1.033,1.234],[1.44,1.31,1.05,1.36],[1.1,1.22,2.019,1.19]], 5)
+    traj = ExcitingTrajectory([[1.11,2.31,1.02,1.21],[2.1,1.11,1.032,1.25],[1.12,1.21,1.05,1.12],[1.05,1.06,1.033,1.234],[1.44,1.31,1.05,1.36],[1.1,1.22,2.019,1.19]], 6.5)
     #traj = ClippedTrajectory(robot.q, [pi/2, -pi/8, pi/4, -pi/4, pi/2, pi/2.5], 5)
 
-    loop = Adaptive_FFW(robot, PyPlot(), model, plotting = False, u_bound = [2e2,2e2,2e2,2e2,2e2,2e2])
+    loop = Adaptive_FFW(robot, PyPlot(), model, plotting = False, u_bound = [2e2,2e2,2e2,2e2,2e2,2e2], gainMatrixMultiplier=0.0001)
     loop.setR(reference = traj, threshold = 0.05)
     loop.setK(kp=[150,80,60,15,3,1.5], kd = [10,7,5,1,0.001,0.001])
         
