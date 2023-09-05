@@ -114,9 +114,9 @@ if __name__ == "__main__":
     traj = ExcitingTrajectory([[1.11,2.31,1.02,1.21],[2.1,1.11,1.032,1.25],[1.12,1.21,1.05,1.12],[1.05,1.06,1.033,1.234],[1.44,1.31,1.05,1.36],[1.1,1.22,2.019,1.19]], 6.5)
     #traj = ClippedTrajectory(robot.q, [pi/2, -pi/8, pi/4, -pi/4, pi/2, pi/2.5], 5)
 
-    loop = Adaptive_FFW(robot, PyPlot(), model, plotting = False, u_bound = [2e2,2e2,2e2,2e2,2e2,2e2], gainMatrixMultiplier=0.0001)
+    loop = Adaptive_FFW(robot, PyPlot(), model, plotting = False, u_bound = [2e2,2e2,2e2,2e2,2e2,2e2], gainMatrixMultiplier=0.000001)
     loop.setR(reference = traj, threshold = 0.05)
-    loop.setK(kp=[150,80,60,5,1,1], kd = [10,7,5,0.5,0.00001,0.001])
+    loop.setK(kp=[150,80,60,5,5,2], kd = [10,7,5,0.5,0.01,0.01])
         
     #checkGains(model, robot, loop.kp, loop.kd)
     

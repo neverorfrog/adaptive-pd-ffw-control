@@ -356,7 +356,7 @@ class UR3(DHRobot):
             symbolic=symbolic,
         )
 
-        self.qr = np.array([90, -40, 30, -90, 100, -10]) * deg
+        self.qr = np.array([90, -40, 90, -90, 100, -45]) * deg
         self.qz = np.zeros(6)
 
         self.addconfiguration("qr", self.qr)
