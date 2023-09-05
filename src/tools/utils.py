@@ -13,7 +13,7 @@ class ClippedTrajectory():
         self.T = T
         
     def __init__(self, start, goal, T) -> None:
-        self.functions = [quintic_func(start[i], goal[i],T) for i in range(len(start))]
+        self.functions = [quintic_func(start[i],goal[i],T) for i in range(len(start))]
         self.T = T
         self.goal = goal
         self.start = start
@@ -32,6 +32,26 @@ class ClippedTrajectory():
 
     def getTrajList(self):
         return self.functions
+    
+class SinusoidalTrajectory():
+    
+    def __init__(self, bounds = None):
+        self.bounds = np.array(bounds)
+    
+    def __call__(self, n, t):
+        '''Returns a tuple of three arrays (q qdot qdotdot)'''
+        q_d = np.ndarray((n))
+        qd_d = np.ndarray((n))
+        qdd_d = np.ndarray((n))
+        
+        bounds = self.bounds if self.bounds is not None else np.array([1]*n)
+        
+        for i in range(n):
+            q_d[i] = -np.sin(t)*bounds[i]
+            qd_d[i] = -np.cos(t)*bounds[i]
+            qdd_d[i] = np.sin(t)*bounds[i]
+        
+        return q_d, qd_d, qdd_d
 
 class ExcitingTrajectory():
     MAGIC_OVERFLOW = 7

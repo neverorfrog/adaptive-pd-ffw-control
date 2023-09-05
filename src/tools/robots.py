@@ -7,7 +7,7 @@ from tools.utils import skew
 
 class ParametrizedRobot(DHRobot):
     '''Takes a real robot and parametrizes its dynamic data (adding some noise if needed for adaptive control tests)'''
-    def __init__(self, realrobot, stddev = 1, seed = None):
+    def __init__(self, realrobot, dev_factor = 0.2, seed = 42):
         np.random.seed(seed)
         robot = realrobot
         n = len(robot.links)
@@ -22,17 +22,18 @@ class ParametrizedRobot(DHRobot):
 
             real_I_link = robot.links[i].I + robot.links[i].m*np.matmul(skew(robot.links[i].r).T, skew(robot.links[i].r))
             real_mr = robot.links[i].m*robot.links[i].r 
-
-            #Computation of actual dynamic parameters of the belief robot
-            self.pi[shift+0] = max(0, robot.links[i].m + np.random.normal(0, stddev, 1))
-            self.pi[shift+1:shift+4] = real_mr + np.random.normal(0, stddev, (3,))
-            self.pi[shift+4:shift+10] = np.maximum(real_I_link[np.triu_indices(3)], np.random.normal(0, stddev, (6,)))
             
             #Computation of actual dynamic parameters of the real robot (ground truth)
             self.realpi[shift+0] = robot.links[i].m 
             self.realpi[shift+1:shift+4] = real_mr
             self.realpi[shift+4:shift+10] = real_I_link[np.triu_indices(3)]
-            
+
+            #Computation of actual dynamic parameters of the belief robot
+            self.pi[shift+0] = max(0, np.random.normal(robot.links[i].m, robot.links[i].m * dev_factor, 1))
+            self.pi[shift+1:shift+4] = np.random.normal(real_mr, np.abs(real_mr * dev_factor), (3,))
+            self.pi[shift+4:shift+10] = np.random.normal(real_I_link[np.triu_indices(3)], real_I_link[np.triu_indices(3)] * dev_factor, (6,))
+        
+        
 
 class TwoLink(DHRobot):
     """
@@ -50,7 +51,7 @@ class TwoLink(DHRobot):
             alpha = 0, #link twist
             a = 0.5, #link length
             d = 0, #offset along the z axis
-            m = 20, #mass of the link
+            m = 10, #mass of the link
             r = [-0.35,0,0], #position of COM with respect to link frame
             I=[0.0, 1.1, 2.2, 0.1, 1.2, 0.2], #inertia tensor I = [I_xx, I_yy, I_zz,I_xy, I_yz, I_xz]
             qlim=[-135 * deg, 135 * deg]
