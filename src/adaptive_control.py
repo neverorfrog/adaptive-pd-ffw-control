@@ -108,7 +108,7 @@ class Adaptive_FFW(TrajectoryControl):
     
 if __name__ == "__main__":
     
-    robot = ParametrizedRobot(UR3(), max_parameters_error = 0.3, seed=42)
+    robot = ParametrizedRobot(UR3(), max_parameters_error = 1., seed=42)
     model = EulerLagrange(robot ,os.path.join("src/models",robot.name)) 
     
     traj = ExcitingTrajectory([[1.11,2.31,1.02,1.21],[2.1,1.11,1.032,1.25],[1.12,1.21,1.05,1.12],[1.05,1.06,1.033,1.234],[1.44,1.31,1.05,1.36],[1.1,1.22,2.019,1.19]], 6.5)
@@ -116,7 +116,7 @@ if __name__ == "__main__":
 
     loop = Adaptive_FFW(robot, PyPlot(), model, plotting = False, u_bound = [2e2,2e2,2e2,2e2,2e2,2e2], gainMatrixMultiplier=0.0001)
     loop.setR(reference = traj, threshold = 0.05)
-    loop.setK(kp=[150,80,60,15,3,1.5], kd = [10,7,5,1,0.001,0.001])
+    loop.setK(kp=[150,80,60,5,1,1], kd = [10,7,5,0.5,0.00001,0.001])
         
     #checkGains(model, robot, loop.kp, loop.kd)
     

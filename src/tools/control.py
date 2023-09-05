@@ -14,7 +14,7 @@ class Control():
         
         #robot 
         self.robot = robot
-        self.robot.q = np.zeros((robot.n))
+        self.robot.q = robot.realrobot.qr
         self.robot.qd = np.zeros((robot.n))
         self.robot.qdd = np.zeros((robot.n))
         
