@@ -20,7 +20,7 @@ def Polar_loop(robot, loadpi = False):
     model = EulerLagrange(robot, path = os.path.join("src/models",robot.name), loadpi = loadpi) 
     traj = SinusoidalTrajectory([pi/3,pi/4])
     loop = Adaptive_FFW(robot, PyPlot(), model, plotting = False)
-    loop.adaptiveGains = np.array([0.1]+[8e-3]*10) 
+    loop.adaptiveGains = np.array([5e-2]+[5e-7]*10) 
     loop.setR(reference = traj, threshold = 0.05)
     loop.setK(kp = [20,10], kd = [6,3]) 
     return loop
@@ -28,9 +28,10 @@ def Polar_loop(robot, loadpi = False):
 if __name__ == "__main__":
     for i in range(1):
         robot = ParametrizedRobot(SCARA(), dev_factor = 5)
-        loop = SCARA_loop(robot)
-        robot.q = [pi/6,0,0,0]
-        loop.simulate(dt = 0.001, T = 10)
+        model = EulerLagrange(robot)
+        Profiler.print() 
+        loop = Polar_loop(robot)
+        # loop.simulate(dt = 0.001, T = 10)
         # np.save(open(os.path.join(os.path.join("src/models",robot.name),"pi.npy"), "wb"), robot.pi)
         Profiler.mean()
     loop.plot()
