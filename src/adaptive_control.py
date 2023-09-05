@@ -81,30 +81,14 @@ class Adaptive_FFW(TrajectoryControl):
         #Update rule
         Profiler.start("Update Rule")
         
-        #gainMatrix = np.diag([0.1,0.1,0.1,0.000001,0.000001,0.000001])
         sat_e = np.array([sat(el) for el in e], dtype=np.float64)
         deltaPi = self.gainMatrix @ (Y.T @ (sat_e + ed))
         self.robot.pi = self.robot.pi + deltaPi
         Profiler.stop()
-    
-        #gtM = self.robot.inertia(self.robot.q)
-        #predM = self.dynamicModel.inertia(q,True)
 
-        #print(np.linalg.norm(gtM-predM))
-
-        
-        #tp = np.matmul(self.kp,e)
-        #td = np.matmul(self.kd,ed)
-
-        #print(f"ERROR P: {e}    NORM: {np.linalg.norm(e)}")  
-        #print(f"ERROR V: {ed}    NORM: {np.linalg.norm(ed)}")
-        #print(f"TORQUE DAL PROPORTIONAL: {tp[3]}   NORM: {np.linalg.norm(tp)}")
-        #print(f"TORQUE DAL DERIVATIVE: {td[3]}   NORM: {np.linalg.norm(td)}")
-        #print(f"TORQUE DAL MODELLO: {np.linalg.norm(np.matmul(Y, self.robot.pi).astype(np.float64))}")
         print(f"TIME {self.t[-1]}")
         
-        #return np.matmul(Y, self.robot.realpi).astype(np.float64), self.t[-1] > 5 or isnan(torque[0])
-        return torque, self.t[-1] > 6.5 or isnan(torque[0])
+        return torque, self.t[-1] > 6 or isnan(torque[0])
     
 if __name__ == "__main__":
     
@@ -114,9 +98,9 @@ if __name__ == "__main__":
     traj = ExcitingTrajectory([[1.11,2.31,1.02,1.21],[2.1,1.11,1.032,1.25],[1.12,1.21,1.05,1.12],[1.05,1.06,1.033,1.234],[1.44,1.31,1.05,1.36],[1.1,1.22,2.019,1.19]], 6.5)
     #traj = ClippedTrajectory(robot.q, [pi/2, -pi/8, pi/4, -pi/4, pi/2, pi/2.5], 5)
 
-    loop = Adaptive_FFW(robot, PyPlot(), model, plotting = False, u_bound = [2e2,2e2,2e2,2e2,2e2,2e2], gainMatrixMultiplier=0.000001)
+    loop = Adaptive_FFW(robot, PyPlot(), model, plotting = False, u_bound = [2e2,2e2,2e2,2e2,2e2,2e2], gainMatrixMultiplier=0.001)
     loop.setR(reference = traj, threshold = 0.05)
-    loop.setK(kp=[150,80,60,5,5,2], kd = [10,7,5,0.5,0.01,0.01])
+    loop.setK(kp=[3,3,5,1.5,1.5,1.5], kd = [2,1,2,0.5,0.001,0.001])
         
     #checkGains(model, robot, loop.kp, loop.kd)
     
