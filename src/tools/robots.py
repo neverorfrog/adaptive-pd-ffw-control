@@ -210,6 +210,7 @@ class Spatial3R(DHRobot):
         )
 
         links = [link1, link2, link3]
+        self.qr = np.array([0, pi / 2, 0])
 
         super().__init__(links, name="Spatial 3R", keywords=("polar",), symbolic = False)
     
