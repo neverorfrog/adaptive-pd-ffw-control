@@ -6,8 +6,6 @@ from multiprocessing import Process
 directory = "src/models"
 robot = "Puma 560"
 
-
-
 def simply(path):
     print(f"simplify of {path} started")
     bin = np.load(open(path,"rb"), allow_pickle=True)
