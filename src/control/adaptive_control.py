@@ -6,7 +6,7 @@ from tools.utils import *
 from control.trajectory_control import TrajectoryControl
 from tools.dynamics import *
 
-class Adaptive_Facile(TrajectoryControl):
+class Adaptive_variant(TrajectoryControl):
     
     def __init__(self, robot = None, env = None, dynamicModel: EulerLagrange = None, plotting = True, u_bound = 700):
         super().__init__(robot, env, dynamicModel, plotting)
